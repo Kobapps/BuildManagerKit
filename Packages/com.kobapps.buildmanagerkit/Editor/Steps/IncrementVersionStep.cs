@@ -19,7 +19,7 @@ namespace BuildManagerKit.Editor
         [Tooltip("Which component of major.minor.patch to increment.")]
         [SerializeField] private VersionComponent m_Component = VersionComponent.Patch;
 
-        [Tooltip("Write the bumped value back to the profile's version file or to PlayerSettings.")]
+        [Tooltip("Write the bumped value back to the run's version file or to PlayerSettings.")]
         [SerializeField] private bool m_Persist = true;
 
         /// <inheritdoc />
@@ -31,6 +31,11 @@ namespace BuildManagerKit.Editor
         {
             if (!VersionService.IsValid(context.Version))
                 report.AddWarning($"Version '{context.Version}' is not major.minor.patch and cannot be bumped.");
+
+            if (!context.Versioning.manageVersion && !m_Persist)
+                report.AddWarning(
+                    "Nothing manages the version for this build and this action does not persist, so the bump "
+                    + "only affects the {version} tokens of this run and the player keeps its current version.");
         }
 
         /// <inheritdoc />
@@ -54,8 +59,9 @@ namespace BuildManagerKit.Editor
 
             PlayerSettings.bundleVersion = bumped;
 
-            if (context.Profile != null && context.Profile.VersionSource == VersionSource.VersionFile)
-                VersionService.WriteVersionFile(context.Profile, bumped);
+            // Whichever level owns versioning may back the version with a text file; writing it back
+            // there is what stops the next build from resolving the old value again.
+            VersionService.WriteVersionFile(context.Versioning, bumped);
 
             AssetDatabase.SaveAssets();
         }

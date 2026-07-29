@@ -70,10 +70,17 @@ namespace BuildManagerKit.Tests
             profile.FindProperty("m_OutputDirectoryTemplate").stringValue =
                 "{projectRoot}/Temp/BuildManagerKitTests/{env}/{targetShort}";
             profile.FindProperty("m_ExecutableNameTemplate").stringValue = "BmkTest";
-            profile.FindProperty("m_VersionSource").intValue = (int)VersionSource.Profile;
-            profile.FindProperty("m_Version").stringValue = "1.2.3";
-            profile.FindProperty("m_BuildNumberPolicy").intValue = (int)BuildNumberPolicy.Manual;
-            profile.FindProperty("m_BuildNumber").intValue = 77;
+            profile.FindProperty("m_VersioningMigrated").boolValue = true;
+            profile.FindProperty("m_OverrideVersioning").boolValue = true;
+
+            var versioning = profile.FindProperty("m_Versioning");
+            versioning.FindPropertyRelative("manageVersion").boolValue = true;
+            versioning.FindPropertyRelative("source").intValue = (int)VersionSource.Profile;
+            versioning.FindPropertyRelative("version").stringValue = "1.2.3";
+            versioning.FindPropertyRelative("useVersionFile").boolValue = false;
+            versioning.FindPropertyRelative("manageBuildNumber").boolValue = true;
+            versioning.FindPropertyRelative("buildNumberPolicy").intValue = (int)BuildNumberPolicy.Manual;
+            versioning.FindPropertyRelative("buildNumber").intValue = 77;
             profile.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.CreateAsset(m_Profile, k_TempFolder + "/Profile_Test.asset");
 

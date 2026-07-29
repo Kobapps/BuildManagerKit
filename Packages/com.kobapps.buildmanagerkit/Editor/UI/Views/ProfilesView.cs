@@ -16,6 +16,8 @@ namespace BuildManagerKit.Editor
         private static readonly HashSet<string> k_HiddenFields = new HashSet<string>
         {
             "m_Script",
+            "m_OverrideVersioning",
+            "m_Versioning",
             "m_PreBuildSteps",
             "m_PostBuildSteps"
         };
@@ -108,6 +110,26 @@ namespace BuildManagerKit.Editor
                     Window.RefreshCurrentView();
                 });
 
+                // Right-click straight on the row, which is where deleting one of a long list is
+                // actually convenient.
+                item.AddManipulator(new ContextualMenuManipulator(evt =>
+                {
+                    evt.menu.AppendAction("Select", _ =>
+                    {
+                        m_Selected = captured;
+                        Window.SelectedProfile = captured;
+                        Window.RefreshCurrentView();
+                    });
+
+                    evt.menu.AppendAction("Ping Asset", _ => EditorGUIUtility.PingObject(captured));
+                    evt.menu.AppendSeparator();
+                    evt.menu.AppendAction("Delete…", _ =>
+                    {
+                        m_Selected = captured;
+                        DeleteSelected();
+                    });
+                }));
+
                 list.Add(item);
             }
 
@@ -170,10 +192,18 @@ namespace BuildManagerKit.Editor
 
             var ping = new Button(() => EditorGUIUtility.PingObject(m_Selected)) { text = "Ping Asset" };
 
+            var delete = new Button(DeleteSelected)
+            {
+                text = "Delete",
+                tooltip = "Delete this profile asset and remove it from the settings and from every queue."
+            };
+            delete.AddToClassList("bmk-button-danger");
+
             headerRow.Add(title);
             headerRow.Add(BuildManagerUI.Spacer());
             headerRow.Add(validate);
             headerRow.Add(ping);
+            headerRow.Add(delete);
             headerRow.Add(buildButton);
             header.Add(headerRow);
 
@@ -191,6 +221,8 @@ namespace BuildManagerKit.Editor
             BuildManagerUI.DrawChildren(settingsCard, serializedObject.GetIterator(), serializedObject,
                 k_HiddenFields);
             detail.Add(settingsCard);
+
+            detail.Add(BuildVersioningCard(serializedObject));
 
             detail.Add(BuildManagerUI.GlobalActionsBanner(Settings, "profile", includeActivate: false));
 
@@ -210,6 +242,100 @@ namespace BuildManagerKit.Editor
 
             detail.Bind(serializedObject);
             return detail;
+        }
+
+        /// <summary>
+        /// Versioning for this profile: inherited from the project's common configuration unless the
+        /// profile says otherwise.
+        ///
+        /// Drawn by hand so the inherited case can say what it resolves to — a profile that inherits
+        /// shows the answer instead of an empty block, which is the difference between "versioning is
+        /// handled elsewhere" and "versioning is not configured".
+        /// </summary>
+        private VisualElement BuildVersioningCard(SerializedObject serializedObject)
+        {
+            var overrideProperty = serializedObject.FindProperty("m_OverrideVersioning");
+            var versioningProperty = serializedObject.FindProperty("m_Versioning");
+
+            var card = BuildManagerUI.Card(
+                "Versioning",
+                "Where the version string and the build number of a build of this profile come from. "
+                + "Leave the override off to use the project's common configuration — set that on the base "
+                + "environment in the Environments tab.");
+
+            var toggle = new PropertyField(overrideProperty, "Version this profile differently");
+            toggle.Bind(serializedObject);
+            card.Add(toggle);
+
+            var inherited = BuildManagerUI.Muted(string.Empty);
+            inherited.AddToClassList("bmk-inherited__label");
+            card.Add(inherited);
+
+            var own = new PropertyField(versioningProperty, string.Empty);
+            own.Bind(serializedObject);
+            card.Add(own);
+
+            void Refresh()
+            {
+                serializedObject.Update();
+
+                var overrides = overrideProperty.boolValue;
+                own.style.display = overrides ? DisplayStyle.Flex : DisplayStyle.None;
+                inherited.style.display = overrides ? DisplayStyle.None : DisplayStyle.Flex;
+
+                if (overrides)
+                    return;
+
+                // Resolved against the active environment: that is the pairing a Build press uses.
+                var resolved = ConfigResolver.ResolveVersioning(Settings, Settings.ActiveEnvironment, null);
+
+                inherited.text = resolved.IsOwned
+                    ? $"Inherited from {resolved.OwnerLabel}: {resolved.Config.Describe()}."
+                    : "Nothing manages versioning in this project, so the version and build number are left "
+                      + "exactly as the project has them. Switch this on, or set the common configuration on "
+                      + "the base environment.";
+            }
+
+            card.TrackPropertyValue(overrideProperty, _ => Refresh());
+            card.schedule.Execute(Refresh);
+
+            return card;
+        }
+
+        private void DeleteSelected()
+        {
+            var profile = m_Selected;
+            if (profile == null)
+                return;
+
+            var usedByQueues = Settings.Queues
+                .Where(queue => queue?.entries != null)
+                .SelectMany(queue => queue.entries)
+                .Count(entry => entry != null && entry.profile == profile);
+
+            var message = $"Delete the profile '{profile.DisplayName}'?\n\n"
+                          + $"The asset {AssetDatabase.GetAssetPath(profile)} is deleted and the profile is "
+                          + "removed from the settings"
+                          + (usedByQueues > 0
+                              ? $" and from {usedByQueues} queue entr(y/ies) that build it."
+                              : ".")
+                          + "\n\nThis cannot be undone.";
+
+            if (!EditorUtility.DisplayDialog("Delete profile", message, "Delete", "Cancel"))
+                return;
+
+            if (!BuildManagerBootstrap.DeleteProfile(profile))
+                return;
+
+            m_Selected = Settings.Profiles.FirstOrDefault(candidate => candidate != null);
+
+            // The window remembers the selection by id, so the stored id has to be replaced rather
+            // than left pointing at a profile that no longer exists — otherwise a later profile
+            // created with the same id would silently inherit the selection.
+            Window.SelectedProfile = m_Selected;
+
+            Window.RefreshHeader();
+            Window.RefreshCurrentView();
         }
 
         private void ShowCreateMenu()

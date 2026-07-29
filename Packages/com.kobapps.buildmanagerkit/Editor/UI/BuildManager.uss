@@ -658,3 +658,103 @@
     margin-left: 10px;
     min-width: 0;
 }
+
+/* ---- Build button with a target menu ------------------------------------------ */
+
+/* One control, two hit areas: the wide half builds what is selected, the caret half
+   opens the target list. Keeping them in a single rounded shell is what makes it read
+   as "Build, or…" rather than as two unrelated buttons. */
+.bmk-build-button {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
+.bmk-build-button__main {
+    margin: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.bmk-build-button__caret {
+    height: 24px;
+    min-height: 24px;
+    width: 22px;
+    min-width: 22px;
+    max-width: 22px;
+    padding: 0;
+    margin: 0 0 0 1px;
+    border-width: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: var(--bmk-radius);
+    border-bottom-right-radius: var(--bmk-radius);
+    background-color: var(--bmk-accent);
+    color: rgb(255, 255, 255);
+    font-size: 9px;
+    -unity-text-align: middle-center;
+}
+
+.bmk-build-button__caret:hover {
+    background-color: rgb(110, 180, 255);
+}
+
+.bmk-build-button__caret:disabled {
+    opacity: 0.45;
+}
+
+/* ---- Versioning ---------------------------------------------------------------- */
+
+/* The detail rows sit under their switch, so the indent is what shows they belong to
+   it — and an empty indent is invisible rather than leaving a gap. */
+.bmk-versioning__details {
+    margin-left: 14px;
+    margin-bottom: 2px;
+}
+
+.bmk-versioning Label.bmk-muted {
+    margin-top: 6px;
+}
+
+/* ---- Inherited values ---------------------------------------------------------- */
+
+.bmk-inherited {
+    flex-direction: row;
+    align-items: center;
+    margin: 1px 0 3px 14px;
+}
+
+.bmk-inherited__label {
+    font-size: 10px;
+    color: var(--bmk-muted);
+    white-space: normal;
+    flex-shrink: 1;
+    margin: 1px 0 6px 3px;
+}
+
+/* ---- The pinned common configuration row --------------------------------------- */
+
+/* Sits above the environment list in its own section: selectable like a row, but with
+   no grip, because there is nothing to reorder it against. */
+.bmk-common-row {
+    flex-shrink: 0;
+    margin-bottom: 2px;
+    padding-left: 8px;
+}
+
+/* ---- Inherited values ---------------------------------------------------------- */
+
+.bmk-inherited {
+    flex-direction: row;
+    align-items: center;
+    margin: 1px 0 3px 14px;
+}
+
+.bmk-inherited__label {
+    font-size: 10px;
+    color: var(--bmk-muted);
+    white-space: normal;
+    flex-shrink: 1;
+    margin: 1px 0 6px 3px;
+}

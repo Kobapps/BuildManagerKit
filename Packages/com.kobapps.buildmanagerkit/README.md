@@ -16,6 +16,7 @@ makes CI run exactly the same pipeline as the button in the UI.
 - [Concepts](#concepts)
 - [The window](#the-window)
 - [Environments](#environments)
+- [The common configuration](#the-common-configuration)
 - [Reading the environment at runtime](#reading-the-environment-at-runtime)
 - [Safety and scale](#safety-and-scale)
 - [Pre and post build actions](#pre-and-post-build-actions)
@@ -44,7 +45,7 @@ small `ScriptableObject`; everything else is editor only.
 1. `Tools ▸ Build Manager Kit ▸ Create Starter Setup` — creates the settings asset, the
    `dev` / `stage` / `prod` environments and one profile per installed platform.
 2. `Tools ▸ Build Manager Kit ▸ Build Manager` (`⌘⇧K` / `Ctrl+Shift+K`).
-3. Pick an environment in the header, pick a profile, press **Build**.
+3. Pick an environment in the header and press **Build** — or its ▼ to build a specific target.
 
 Everything the wizard creates is a normal asset under `Assets/BuildManagerKit/`. Rename, move or
 delete anything you do not want.
@@ -54,7 +55,7 @@ delete anything you do not want.
 | Concept | What it is |
 | --- | --- |
 | **Profile** (`BuildTargetProfile`) | *How* to build one platform: target, scenes, output path, scripting backend, IL2CPP configuration, stripping, compression, signing, build options. |
-| **Environment** (`BuildEnvironment`) | *Which flavour* to build: scripting defines, product name, bundle identifier, application icon, runtime key/value variables and per-environment config assets. |
+| **Environment** (`BuildEnvironment`) | *Which flavour* to build: scripting defines, and the differences from the common configuration — product name, bundle identifier, application icon, runtime variables, versioning — plus per-environment config assets. A field left empty takes the common value. |
 | **Action** (`BuildStep`) | A unit of work that runs before or after the player build. |
 | **Queue** (`BuildQueue`) | An ordered list of profiles built back to back. |
 | **Settings** (`BuildManagerSettings`) | The project-wide catalogue, the global action lists and the behaviour toggles. |
@@ -67,21 +68,25 @@ you nine builds without duplicating a single setting.
 | Tab | Purpose |
 | --- | --- |
 | **Dashboard** | Active environment and platform, the next build's resolved output path, Build / Dry Run / Validate, a live console and recent runs. |
-| **Profiles** | The profile catalogue plus the full configuration and both action lists. |
-| **Environments** | Create, edit and activate environments. |
+| **Profiles** | The profile catalogue plus the full configuration, versioning and both action lists. Delete a profile from its header or by right-clicking its row. |
+| **Environments** | The pinned common configuration item, plus creating, editing, reordering, activating and deleting environments. |
 | **Queues** | Multi-platform batches and their progress. |
 | **History** | Every past run with its outcome, timings, artifacts and full searchable log. |
 | **CI / CD** | The exact command line for your current selection, plus generated GitHub Actions, GitLab CI, Jenkins and shell pipelines. |
-| **Settings** | Behaviour toggles, the global action lists and the extension reference. |
+| **Settings** | The common configuration, behaviour toggles, the global action lists and the extension reference. |
 
-The header pills switch environment, platform and profile from anywhere.
+The header has two pills — the active environment and the Editor platform — and one **Build**
+button. The wide half builds the selected profile; the ▼ half lists every profile with its platform
+icon, so building a specific target is one click and the choice becomes the new selection. Dry Run
+and Validate live in the same menu.
 
 There are two more places to switch environment without opening anything:
 
-- **Main toolbar dropdown** (Unity 6.5+) — a coloured pill in Unity's own toolbar showing the
+- **Main toolbar dropdown** (Unity 6.4+) — a coloured pill in Unity's own toolbar showing the
   active environment. Click to switch, right-click for the window and the other shortcuts. Move or
-  hide it with Unity's normal toolbar customisation. On Unity 6.0–6.4 the toolbar API does not
-  exist yet, so the overlay and menu below cover it.
+  hide it with Unity's normal toolbar customisation. It needs the main-toolbar extension API, so on
+  Unity 6.0–6.3 it is compiled out and the overlay and menu below cover the same ground — if the pill
+  is missing in a project, check that project's Editor version first.
 - **Scene view overlay** — *Build Environment*, enable it from the Scene view overlay menu.
 
 ## Environments
@@ -102,6 +107,35 @@ environment build never leaves the project settings changed.
 Play mode therefore behaves like the shipped build. `⌘⇧E` / `Ctrl+Shift+E` cycles to the next one.
 
 Mark production as **Require Confirmation** and it asks before activating or building.
+
+Right-click an environment row for **Select**, **Make Active**, **Ping Asset** and **Delete…**.
+Deleting removes the asset and every reference to it — the catalogue entry, the queues that built it,
+and the profiles that allowed or defaulted to it — and hands the Editor to another environment when
+the deleted one was active. It refuses only when the environment is both the last one and the active
+one.
+
+## The common configuration
+
+Most settings are the same in every flavour: the company name, the studio's bundle identifier prefix,
+the log level, the version. They live in one **Common configuration** item, pinned above the
+environment list in the Environments tab. Select it and it edits like an environment — it just is not
+one, so it sits in its own section rather than inside the reorderable list.
+
+| Shared by every environment | Stays per environment |
+| --- | --- |
+| Product name, company name, bundle identifier | Scripting defines — each environment lists its own, and they may overlap |
+| Application icon, force development build | The generated `ENV_<ID>` define, which is what identifies the environment |
+| Shared runtime variables, merged by key | Published config assets — shared ones go in *Global Config Assets* on the Settings tab |
+| Versioning | Actions — shared work belongs in the global action lists |
+
+**There is no "override" checkbox.** An environment's field shows the shared value greyed out while it
+is empty; type into it and this environment overrides, clear it and the shared value comes back. An
+empty field in the common item means Build Manager Kit does not manage that setting at all, and the
+project's own player settings are left as they are.
+
+Precedence is most-specific-wins: **profile over environment over common**, and each environment's
+card says under every field where the value in effect came from. A company rename is one edit, and an
+exception is one field.
 
 ### Ordering
 
@@ -456,7 +490,8 @@ plain shell script, already wired to your profiles. Samples of each are also und
 
 `ConfigCLI` is the other half: it reads and edits the configuration rather than building with it,
 so a provisioning script never has to touch the `.asset` files as text — where a wrong edit
-silently drops `[SerializeReference]` action lists and GUID asset references.
+silently drops `[SerializeReference]` action lists and GUID asset references. `SetCommon` edits the
+shared values, `SetEnvironment` the per-environment differences.
 
 ```bash
 # Read everything as JSON: environments, profiles, queues, config keys, health check.
@@ -468,6 +503,10 @@ silently drops `[SerializeReference]` action lists and GUID asset references.
 
 -executeMethod BuildManagerKit.Editor.ConfigCLI.SetConfigAsset \
     -bmkEnv qa -bmkKey gameConfig -bmkAsset Assets/Config/GameConfig_QA.asset
+
+# The values every environment shares, including versioning
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetCommon \
+    -bmkCompanyName "Studio" -bmkAppIdentifier com.studio.game -bmkVersion 1.4.2
 ```
 
 `SetEnvironment` changes only the arguments you pass, variables merge by key, and every mutating
@@ -506,16 +545,43 @@ Set **Stop On First Failure** per queue.
 
 ## Versioning
 
-Version source: `PlayerSettings` · `Profile` · `VersionFile` (first non-empty line of a text file)
-· `GitTag` (`git describe --tags`, leading `v` stripped).
+Versioning is configured once in the [common configuration](#the-common-configuration) panel at the
+top of the Environments tab, and both halves are **optional**:
 
-Build number policy: `Manual` · `AutoIncrementOnSuccess` (the profile's counter, bumped after every
-success) · `GitCommitCount` · `Timestamp` (minutes since 2020-01-01 UTC — monotonic and safely
-below Google Play's `versionCode` ceiling).
+| Switch | Off means |
+| --- | --- |
+| **Manage version** | `PlayerSettings.bundleVersion` is left exactly as the project has it |
+| **Version from a text file** | the version comes from the source below instead of a file |
+| **Manage build number** | the Android `versionCode` and the iOS/macOS build number are left alone |
+
+Off is a real answer, not a disabled state: a project whose release script or monorepo tool stamps the
+version wants Unity's value untouched rather than overwritten with something that merely looks
+authoritative. Each switch hides its own fields, so a card only ever shows values that are in effect.
+
+Version source: `PlayerSettings` · an explicit value · `GitTag` (`git describe --tags`, leading `v`
+stripped). A **version text file** is a toggle of its own rather than a source: switch it on and the
+first non-empty line of the file is the version, and a bump made by the *Increment Version* action is
+written back there so it survives.
+
+Build number policy: `Manual` · `AutoIncrementOnSuccess` (a stored counter bumped after every
+success) · `GitCommitCount` · `Timestamp` (minutes since 2020-01-01 UTC — monotonic and safely below
+Google Play's `versionCode` ceiling).
+
+An environment can version differently — staging shipping `1.4.0-rc` — and so can a profile, with
+the usual precedence: **profile over environment over common**. The auto-increment counter is stored
+on whichever asset owns the block — the settings asset for the shared one — and the Dashboard, the
+build log and the CLI all name that asset, so there is never a question about where a build number
+came from. A queue therefore advances the shared counter once per successful entry; give a profile its
+own versioning when a platform needs its own sequence. A build number supplied explicitly with
+`-bmkBuildNumber` leaves the counter alone, since that number did not come from it.
 
 The resolved values are written to `PlayerSettings.bundleVersion`,
 `PlayerSettings.Android.bundleVersionCode`, `PlayerSettings.iOS.buildNumber` and
-`PlayerSettings.macOS.buildNumber`.
+`PlayerSettings.macOS.buildNumber` — each only if the matching switch is on.
+
+Profiles from before 1.2 versioned themselves; they are migrated when they load, with their override
+switched on and their counter intact, so nothing about the next build changes. Profiles created after
+it start out sharing the common versioning.
 
 ## Android signing
 
@@ -567,7 +633,9 @@ Unity appends its own sub-paths beneath the one it is given and Windows stops at
 - profiles sharing an output template with no `{target}`, `{platform}` or `{profile}` token, so a
   queue building them in sequence keeps only the last one;
 - a default environment the profile does not allow, broken queue entries, unregistered assets, and
-  a log folder inside `Assets`.
+  a log folder inside `Assets`;
+- a common configuration with duplicate shared variable keys, a variable with no key, or a version
+  file that does not exist — mistakes that would otherwise show up in every flavour at once.
 
 Run it as a pull request gate — it costs seconds rather than a build:
 

@@ -210,27 +210,24 @@ namespace BuildManagerKit.Editor
                 "Editor platform: the active build target.\n"
                 + "Switching preserves each platform's own settings."));
 
-            // A divider plus an explicit "Profile:" prefix: without them this pill and the platform
-            // pill both read as a bare platform name and look like two copies of the same control.
+            // Separates "what am I looking at" from "what will I build".
             var divider = new VisualElement();
             divider.AddToClassList("bmk-divider");
             container.Add(divider);
 
             var profile = SelectedProfile;
 
-            container.Add(BuildManagerUI.Pill(
-                profile != null ? "Profile: " + profile.DisplayName : "Profile: none",
+            // The Build control is also the target selector: pressing it builds the selected profile,
+            // and its menu builds — and selects — any other one.
+            container.Add(BuildManagerUI.BuildSplitButton(
+                profile != null ? "Build " + profile.DisplayName : "Build",
+                () => BuildSelected(false),
+                ShowBuildMenu,
+                profile != null && !BuildRunner.IsRunning,
                 profile != null
-                    ? BuildTargetIcons.Get(profile.Target, profile.StandaloneSubtarget)
-                    : null,
-                ShowProfileMenu,
-                profile != null
-                    ? $"Build profile the Build button uses — targets {profile.Target}."
-                    : "No build profile selected."));
-
-            var build = BuildManagerUI.PrimaryButton("Build", () => BuildSelected(false));
-            build.SetEnabled(profile != null && !BuildRunner.IsRunning);
-            container.Add(build);
+                    ? $"Build '{profile.DisplayName}' for {profile.Target} with the active environment."
+                    : "No build profile yet. Use the ▼ menu to create one.",
+                !BuildRunner.IsRunning));
 
             var overflow = new Button { text = "⋯", tooltip = "More actions" };
             overflow.AddToClassList("bmk-icon-button");
@@ -405,30 +402,66 @@ namespace BuildManagerKit.Editor
             BuildManagerUI.ShowMenu(menu, anchor);
         }
 
-        private void ShowProfileMenu(Rect anchor)
+        /// <summary>
+        /// The Build button's menu: every profile with its platform icon, so a specific target is
+        /// one click away without a second selector control in the header.
+        ///
+        /// Picking a target also makes it the selection, so the big half of the button keeps building
+        /// whatever was built last — the header still answers "what does Build do" at a glance.
+        /// </summary>
+        internal void ShowBuildMenu(Rect anchor)
         {
             var settings = BuildManagerSettings.Instance;
             var menu = new GenericMenu();
             var selected = SelectedProfile;
+            var busy = BuildRunner.IsRunning;
 
             foreach (var profile in settings.Profiles.Where(profile => profile != null))
             {
                 var captured = profile;
-                menu.AddItem(
-                    BuildTargetIcons.GetContent(
-                        profile.Target,
-                        $"{profile.DisplayName} ({BuildTargetUtility.GetShortName(profile.Target)})",
-                        profile.StandaloneSubtarget),
-                    profile == selected,
-                    () =>
-                    {
-                        SelectedProfile = captured;
-                        RefreshCurrentView();
-                    });
+                var label = BuildTargetIcons.GetContent(
+                    profile.Target,
+                    $"Build {profile.DisplayName} ({BuildTargetUtility.GetShortName(profile.Target)})"
+                    + (profile.Enabled ? string.Empty : " — disabled"),
+                    profile.StandaloneSubtarget);
+
+                if (busy)
+                {
+                    menu.AddDisabledItem(label);
+                    continue;
+                }
+
+                menu.AddItem(label, profile == selected, () =>
+                {
+                    SelectedProfile = captured;
+                    RefreshCurrentView();
+                    BuildProfile(captured, BuildManagerSettings.Instance.ActiveEnvironment, false);
+                });
             }
 
             if (settings.Profiles.Count == 0)
+            {
                 menu.AddDisabledItem(new GUIContent("No profiles configured"));
+                menu.AddItem(new GUIContent("Create Starter Profiles"), false, () =>
+                {
+                    BuildManagerBootstrap.CreateDefaultProfiles();
+                    RefreshHeader();
+                    RefreshCurrentView();
+                });
+            }
+
+            menu.AddSeparator(string.Empty);
+
+            if (selected != null && !busy)
+            {
+                menu.AddItem(new GUIContent($"Dry Run {selected.DisplayName}"), false, () => BuildSelected(true));
+                menu.AddItem(new GUIContent($"Validate {selected.DisplayName}"), false, ValidateSelected);
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Dry Run"));
+                menu.AddDisabledItem(new GUIContent("Validate"));
+            }
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Manage Profiles…"), false, () => Open("Profiles"));

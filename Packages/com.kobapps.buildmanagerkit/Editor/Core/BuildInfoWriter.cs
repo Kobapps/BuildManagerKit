@@ -60,7 +60,10 @@ namespace BuildManagerKit.Editor
             var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (environment != null)
             {
-                foreach (var variable in environment.Variables)
+                // Resolved, so play mode sees the variables inherited from the base environment too
+                // — exactly the set a build of this environment would bake in.
+                foreach (var variable in ConfigResolver.ResolveVariables(
+                             BuildManagerSettings.InstanceOrNull, environment))
                 {
                     if (!string.IsNullOrEmpty(variable.key))
                         variables[variable.key] = variable.value ?? string.Empty;

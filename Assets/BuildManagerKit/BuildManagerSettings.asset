@@ -23,6 +23,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0ba2b36b15b4443ec92c2a3b834f5cd3, type: 2}
   m_Queues: []
   m_ActiveEnvironment: {fileID: 11400000, guid: 03a248521f8a94ccfb5dce609cffe4b8, type: 2}
+  m_BaseEnvironment: {fileID: 11400000, guid: 0ba2b36b15b4443ec92c2a3b834f5cd3, type: 2}
   m_DefaultConfigAssets: []
   m_GlobalOnActivateSteps: []
   m_GlobalPreBuildSteps:

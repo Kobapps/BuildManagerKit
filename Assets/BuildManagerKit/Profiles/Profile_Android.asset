@@ -52,6 +52,17 @@ MonoBehaviour:
     overrideTeamId: 0
     appleDeveloperTeamId: 
     appendProject: 0
+  m_OverrideVersioning: 1
+  m_Versioning:
+    manageVersion: 1
+    source: 0
+    version: 1.0.0
+    useVersionFile: 0
+    versionFilePath: version.txt
+    manageBuildNumber: 1
+    buildNumberPolicy: 1
+    buildNumber: 1
+  m_VersioningMigrated: 1
   m_VersionSource: 0
   m_Version: 1.0.0
   m_VersionFilePath: version.txt

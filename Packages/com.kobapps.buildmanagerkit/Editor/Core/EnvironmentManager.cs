@@ -69,7 +69,7 @@ namespace BuildManagerKit.Editor
                         $"Applying environment '{(environment != null ? environment.DisplayName : "none")}'…", 0.3f);
 
                 var definesChanged = ApplyToTarget(environment, namedTarget, settings, null, log);
-                ApplyPlayerSettingOverrides(environment, namedTarget, log);
+                ApplyPlayerSettingOverrides(environment, namedTarget, settings, log);
 
                 if (settings.WriteBuildInfoAsset)
                     BuildInfoWriter.WriteForEditor(environment);
@@ -134,34 +134,53 @@ namespace BuildManagerKit.Editor
             return changed;
         }
 
-        /// <summary>Applies product name, company name and application identifier overrides.</summary>
+        /// <summary>
+        /// Applies product name, company name, icon and application identifier — the environment's
+        /// own values where it overrides them, and the common configuration held by the base
+        /// environment everywhere else.
+        /// </summary>
         public static void ApplyPlayerSettingOverrides(
             BuildEnvironment environment,
             NamedBuildTarget namedTarget,
+            IBuildLog log) =>
+            ApplyPlayerSettingOverrides(environment, namedTarget, BuildManagerSettings.InstanceOrNull, log);
+
+        /// <summary>
+        /// Applies the resolved player settings using a specific settings asset, which is where the
+        /// base environment holding the common configuration is nominated.
+        /// </summary>
+        /// <param name="environment">Environment being applied, may be null.</param>
+        /// <param name="namedTarget">Target the identifier and icon are written for.</param>
+        /// <param name="settings">Settings asset holding the base environment, may be null.</param>
+        /// <param name="log">Optional log to report each applied value to.</param>
+        public static void ApplyPlayerSettingOverrides(
+            BuildEnvironment environment,
+            NamedBuildTarget namedTarget,
+            BuildManagerSettings settings,
             IBuildLog log)
         {
             if (environment == null)
                 return;
 
-            var productName = environment.ProductNameOverride;
+            var productName = ConfigResolver.ResolveProductName(settings, environment);
             if (!string.IsNullOrEmpty(productName))
             {
                 PlayerSettings.productName = productName;
                 log?.Info($"Product name: {productName}");
             }
 
-            var companyName = environment.CompanyNameOverride;
+            var companyName = ConfigResolver.ResolveCompanyName(settings, environment);
             if (!string.IsNullOrEmpty(companyName))
             {
                 PlayerSettings.companyName = companyName;
                 log?.Info($"Company name: {companyName}");
             }
 
-            var icon = environment.ApplicationIconOverride;
+            var icon = ConfigResolver.ResolveApplicationIcon(settings, environment);
             if (icon != null)
                 ApplicationIconService.Apply(namedTarget, icon, log);
 
-            var identifier = environment.ApplicationIdentifierOverride;
+            var identifier = ConfigResolver.ResolveApplicationIdentifier(settings, environment);
             if (!string.IsNullOrEmpty(identifier))
             {
                 try
@@ -224,6 +243,7 @@ namespace BuildManagerKit.Editor
                 StandaloneSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget,
                 Version = PlayerSettings.bundleVersion,
                 BuildNumber = PlayerSettings.Android.bundleVersionCode,
+                ResolvedVersioning = ConfigResolver.ResolveVersioning(settings, environment, null),
                 Git = GitInfo.Read(),
                 Phase = BuildPhase.Setup
             };

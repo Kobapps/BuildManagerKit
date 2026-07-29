@@ -27,6 +27,17 @@ namespace BuildManagerKit.Editor
     public static class ConfigCLI
     {
         /// <summary>
+        /// The arguments that write into a <see cref="VersioningConfig"/>. Listed once so
+        /// <see cref="SetEnvironment"/> can tell "the caller changed versioning" from "the caller
+        /// changed something else", which is what decides whether the override switch is turned on.
+        /// </summary>
+        private static readonly string[] k_VersioningArguments =
+        {
+            "bmkManageVersion", "bmkVersionSource", "bmkVersion", "bmkVersionFile", "bmkNoVersionFile",
+            "bmkManageBuildNumber", "bmkBuildNumberPolicy", "bmkBuildNumber"
+        };
+
+        /// <summary>
         /// Writes the whole configuration as JSON — environments, profiles, queues, config asset
         /// keys and the current health check. This is the read half of the API: a caller runs it
         /// first to learn what exists rather than guessing at ids.
@@ -114,7 +125,9 @@ namespace BuildManagerKit.Editor
         /// <c>-bmkRemoveDefines</c>, <c>-bmkGenerateEnvDefine</c>, <c>-bmkProductName</c>,
         /// <c>-bmkCompanyName</c>, <c>-bmkAppIdentifier</c>, <c>-bmkIcon</c>,
         /// <c>-bmkForceDevelopment</c>,
-        /// <c>-bmkVars</c> (<c>key=value;key=value</c>), <c>-bmkClearVars</c>.
+        /// <c>-bmkVars</c> (<c>key=value;key=value</c>), <c>-bmkClearVars</c> and the versioning
+        /// arguments listed by <see cref="Help"/>. Use <see cref="SetCommon"/> for the values every
+        /// environment shares.
         /// </summary>
         public static void SetEnvironment()
         {
@@ -160,10 +173,9 @@ namespace BuildManagerKit.Editor
             var path = AssetDatabase.GetAssetPath(environment);
             var id = environment.Id;
 
-            settings.EnvironmentsMutable.RemoveAll(candidate => candidate == environment);
-            settings.Save();
-            AssetDatabase.DeleteAsset(path);
-            AssetDatabase.SaveAssets();
+            // The shared implementation, so a headless delete cleans up the same references the
+            // window's Delete does: queue defaults and overrides, and the profiles that allowed it.
+            BuildManagerBootstrap.DeleteEnvironment(settings, environment);
 
             Print($"Deleted environment '{id}' ({path}).");
             FinishWithHealthCheck(arguments);
@@ -274,7 +286,8 @@ Build Manager Kit — configuration command line
   -executeMethod BuildManagerKit.Editor.ConfigCLI.Describe
       -bmkResultFile <path>   Also write the JSON description to this file
       Prints every environment, profile, queue and config key as JSON between
-      BEGIN_BMK_JSON / END_BMK_JSON markers. Run this before editing anything.
+      BEGIN_BMK_JSON / END_BMK_JSON markers, including the common configuration
+      and the versioning each level resolves to. Run this before editing anything.
 
   -executeMethod BuildManagerKit.Editor.ConfigCLI.CreateEnvironment
       -bmkEnv <id>                    Stable id, lower case identifier    (required)
@@ -292,13 +305,36 @@ Build Manager Kit — configuration command line
       -bmkDefines <A;B>               Defines added while active (replaces the list)
       -bmkRemoveDefines <A;B>         Defines stripped while active
       -bmkGenerateEnvDefine <bool>    Auto add ENV_<ID>
-      -bmkProductName <name>          Empty string clears the override
+      -bmkProductName <name>          Empty string takes the common value instead
       -bmkCompanyName <name>
       -bmkAppIdentifier <id>          e.g. com.studio.game.dev
-      -bmkIcon <Assets/path.png>      Application icon while active; "" clears it
+      -bmkIcon <Assets/path.png>      Application icon while active; "" takes the common icon
       -bmkForceDevelopment <Inherit|Enabled|Disabled>
       -bmkVars <k=v;k=v>              Runtime variables, merged by key
       -bmkClearVars                   Drop existing variables before merging
+      -bmkOverrideVersioning <bool>   Version this environment differently from the common
+                                      configuration (false hands versioning back to it)
+      ... plus every versioning argument listed under SetCommon below.
+      Only the arguments you pass are changed. Any versioning argument turns the
+      override on unless -bmkOverrideVersioning false is passed as well.
+
+  -executeMethod BuildManagerKit.Editor.ConfigCLI.SetCommon
+      The values every environment starts from and overrides only where it differs.
+      -bmkProductName <name>          Empty string stops managing it at all
+      -bmkCompanyName <name>
+      -bmkAppIdentifier <id>          e.g. com.studio.game
+      -bmkIcon <Assets/path.png>      Shared application icon; "" clears it
+      -bmkForceDevelopment <Inherit|Enabled|Disabled>
+      -bmkVars <k=v;k=v>              Shared runtime variables, merged by key
+      -bmkClearVars                   Drop existing shared variables before merging
+      -bmkManageVersion <bool>        Let the kit write PlayerSettings.bundleVersion
+      -bmkVersionSource <PlayerSettings|Profile|GitTag>
+      -bmkVersion <1.4.2>             Explicit version (implies Profile source)
+      -bmkVersionFile <version.txt>   Read the version from a file; "" switches it off
+      -bmkNoVersionFile               Switch the version file off, keeping its path
+      -bmkManageBuildNumber <bool>    Let the kit write the Android/iOS build number
+      -bmkBuildNumberPolicy <Manual|AutoIncrementOnSuccess|GitCommitCount|Timestamp>
+      -bmkBuildNumber <int>           The stored counter
       Only the arguments you pass are changed.
 
   -executeMethod BuildManagerKit.Editor.ConfigCLI.DeleteEnvironment  -bmkEnv <id>
@@ -370,12 +406,14 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                 && !WriteDefines(serialized, "m_RemovedScriptingDefines", arguments.GetList("bmkRemoveDefines"), out error))
                 return false;
 
-            WriteOptionalOverride(serialized, arguments, "bmkProductName", "m_OverrideProductName", "m_ProductName");
-            WriteOptionalOverride(serialized, arguments, "bmkCompanyName", "m_OverrideCompanyName", "m_CompanyName");
-            WriteOptionalOverride(serialized, arguments, "bmkAppIdentifier",
-                "m_OverrideApplicationIdentifier", "m_ApplicationIdentifier");
+            WriteOptionalOverride(arguments, "bmkProductName", serialized.FindProperty("m_ProductName"));
+            WriteOptionalOverride(arguments, "bmkCompanyName", serialized.FindProperty("m_CompanyName"));
+            WriteOptionalOverride(arguments, "bmkAppIdentifier",
+                serialized.FindProperty("m_ApplicationIdentifier"));
 
-            if (arguments.Has("bmkIcon") && !WriteIcon(serialized, arguments.GetString("bmkIcon", string.Empty), out error))
+            if (arguments.Has("bmkIcon") &&
+                !WriteIcon(serialized.FindProperty("m_ApplicationIcon"),
+                    arguments.GetString("bmkIcon", string.Empty), out error))
                 return false;
 
             if (arguments.Has("bmkForceDevelopment"))
@@ -390,15 +428,194 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                 serialized.FindProperty("m_ForceDevelopmentBuild").intValue = (int)value;
             }
 
-            if (arguments.Has("bmkClearVars") || arguments.Has("bmkVars"))
-            {
-                if (!WriteVariables(serialized, arguments, out error))
-                    return false;
-            }
+            if ((arguments.Has("bmkClearVars") || arguments.Has("bmkVars")) &&
+                !WriteVariables(serialized.FindProperty("m_Variables"), arguments, out error))
+                return false;
+
+            if (!WriteVersioning(serialized, arguments, out error))
+                return false;
 
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(environment);
             AssetDatabase.SaveAssets();
+            return true;
+        }
+
+        /// <summary>
+        /// Edits the project's common configuration — the values every environment starts from.
+        ///
+        /// Arguments: <c>-bmkProductName</c>, <c>-bmkCompanyName</c>, <c>-bmkAppIdentifier</c>,
+        /// <c>-bmkIcon</c>, <c>-bmkForceDevelopment</c>, <c>-bmkVars</c>, <c>-bmkClearVars</c> and
+        /// every versioning argument. Only the arguments present are changed, so a caller can adjust
+        /// the version without restating the company name.
+        /// </summary>
+        public static void SetCommon()
+        {
+            var arguments = CommandLineArgs.FromProcess();
+            var settings = BuildManagerSettings.Instance;
+            var serialized = new SerializedObject(settings);
+            var common = serialized.FindProperty("m_Common");
+
+            WriteOptionalOverride(arguments, "bmkProductName", common.FindPropertyRelative("productName"));
+            WriteOptionalOverride(arguments, "bmkCompanyName", common.FindPropertyRelative("companyName"));
+            WriteOptionalOverride(arguments, "bmkAppIdentifier",
+                common.FindPropertyRelative("applicationIdentifier"));
+
+            if (arguments.Has("bmkIcon") &&
+                !WriteIcon(common.FindPropertyRelative("applicationIcon"),
+                    arguments.GetString("bmkIcon", string.Empty), out var iconError))
+            {
+                Print("ERROR: " + iconError);
+                Exit(BuildCLI.ExitUsageError, arguments);
+                return;
+            }
+
+            if (arguments.Has("bmkForceDevelopment"))
+            {
+                var raw = arguments.GetString("bmkForceDevelopment");
+                if (!Enum.TryParse<OptionalBool>(raw, true, out var value))
+                {
+                    Print($"ERROR: -bmkForceDevelopment '{raw}' must be Inherit, Enabled or Disabled.");
+                    Exit(BuildCLI.ExitUsageError, arguments);
+                    return;
+                }
+
+                common.FindPropertyRelative("forceDevelopmentBuild").intValue = (int)value;
+            }
+
+            if ((arguments.Has("bmkClearVars") || arguments.Has("bmkVars")) &&
+                !WriteVariables(common.FindPropertyRelative("variables"), arguments, out var variablesError))
+            {
+                Print("ERROR: " + variablesError);
+                Exit(BuildCLI.ExitUsageError, arguments);
+                return;
+            }
+
+            if (!WriteVersioningBlock(common.FindPropertyRelative("versioning"), arguments, out var versioningError))
+            {
+                Print("ERROR: " + versioningError);
+                Exit(BuildCLI.ExitUsageError, arguments);
+                return;
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            settings.Save();
+            AssetDatabase.SaveAssets();
+
+            Print("Updated the common configuration: " + settings.Common.Describe());
+            FinishWithHealthCheck(arguments);
+        }
+
+        /// <summary>
+        /// Applies the versioning arguments to an environment. Passing any of them switches the
+        /// environment's versioning override on, since a value nobody reads is not what the caller
+        /// asked for; <c>-bmkOverrideVersioning false</c> is how it is switched back off — versioning
+        /// then comes from the common configuration again.
+        /// </summary>
+        private static bool WriteVersioning(SerializedObject serialized, CommandLineArgs arguments, out string error)
+        {
+            error = null;
+
+            var touched = k_VersioningArguments.Any(arguments.Has);
+            if (!touched && !arguments.Has("bmkOverrideVersioning"))
+                return true;
+
+            var overrideProperty = serialized.FindProperty("m_OverrideVersioning");
+
+            overrideProperty.boolValue = !arguments.Has("bmkOverrideVersioning")
+                                         || arguments.GetBool("bmkOverrideVersioning");
+
+            return WriteVersioningBlock(serialized.FindProperty("m_Versioning"), arguments, out error);
+        }
+
+        /// <summary>
+        /// Writes the versioning arguments into one <see cref="VersioningConfig"/> property, wherever
+        /// it lives — an environment, or the common configuration.
+        /// </summary>
+        private static bool WriteVersioningBlock(
+            SerializedProperty versioning,
+            CommandLineArgs arguments,
+            out string error)
+        {
+            error = null;
+
+            if (versioning == null || !k_VersioningArguments.Any(arguments.Has))
+                return true;
+
+            if (arguments.Has("bmkManageVersion"))
+                versioning.FindPropertyRelative("manageVersion").boolValue = arguments.GetBool("bmkManageVersion");
+
+            if (arguments.Has("bmkVersionSource"))
+            {
+                var raw = arguments.GetString("bmkVersionSource");
+
+                // VersionFile parses — it is the legacy source value — but it is the -bmkVersionFile
+                // toggle now, and accepting it here would produce a state the window cannot show.
+                if (!Enum.TryParse<VersionSource>(raw, true, out var source) ||
+                    source == VersionSource.VersionFile)
+                {
+                    error = $"-bmkVersionSource '{raw}' must be PlayerSettings, Profile (an explicit value) "
+                            + "or GitTag. Use -bmkVersionFile <path> for a version file.";
+                    return false;
+                }
+
+                versioning.FindPropertyRelative("source").intValue = (int)source;
+            }
+
+            if (arguments.Has("bmkVersion"))
+            {
+                var value = arguments.GetString("bmkVersion", string.Empty);
+                versioning.FindPropertyRelative("version").stringValue = value;
+                versioning.FindPropertyRelative("source").intValue = (int)VersionSource.Profile;
+                versioning.FindPropertyRelative("manageVersion").boolValue = true;
+            }
+
+            if (arguments.Has("bmkVersionFile"))
+            {
+                var path = arguments.GetString("bmkVersionFile", string.Empty);
+                var enabled = !string.IsNullOrWhiteSpace(path);
+
+                versioning.FindPropertyRelative("useVersionFile").boolValue = enabled;
+                versioning.FindPropertyRelative("manageVersion").boolValue = true;
+
+                if (enabled)
+                    versioning.FindPropertyRelative("versionFilePath").stringValue = path.Trim();
+            }
+
+            if (arguments.Has("bmkNoVersionFile"))
+                versioning.FindPropertyRelative("useVersionFile").boolValue = false;
+
+            if (arguments.Has("bmkManageBuildNumber"))
+                versioning.FindPropertyRelative("manageBuildNumber").boolValue =
+                    arguments.GetBool("bmkManageBuildNumber");
+
+            if (arguments.Has("bmkBuildNumberPolicy"))
+            {
+                var raw = arguments.GetString("bmkBuildNumberPolicy");
+                if (!Enum.TryParse<BuildNumberPolicy>(raw, true, out var policy))
+                {
+                    error = $"-bmkBuildNumberPolicy '{raw}' must be Manual, AutoIncrementOnSuccess, "
+                            + "GitCommitCount or Timestamp.";
+                    return false;
+                }
+
+                versioning.FindPropertyRelative("buildNumberPolicy").intValue = (int)policy;
+                versioning.FindPropertyRelative("manageBuildNumber").boolValue = true;
+            }
+
+            if (arguments.Has("bmkBuildNumber"))
+            {
+                var raw = arguments.GetString("bmkBuildNumber");
+                if (!int.TryParse(raw, out var number) || number < 0)
+                {
+                    error = $"-bmkBuildNumber '{raw}' must be a non-negative whole number.";
+                    return false;
+                }
+
+                versioning.FindPropertyRelative("buildNumber").intValue = number;
+                versioning.FindPropertyRelative("manageBuildNumber").boolValue = true;
+            }
+
             return true;
         }
 
@@ -444,6 +661,10 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
             {
                 settingsAssetPath = AssetDatabase.GetAssetPath(settings),
                 activeEnvironment = settings.ActiveEnvironment != null ? settings.ActiveEnvironment.Id : string.Empty,
+                common = settings.Common.Describe(),
+                commonVersioning = settings.Common.versioning != null
+                    ? settings.Common.versioning.Describe()
+                    : "not managed",
                 activeBuildTarget = EditorUserBuildSettings.activeBuildTarget.ToString(),
                 healthy = !report.HasErrors,
                 healthIssues = report.Issues.Select(issue => issue.ToString()).ToArray(),
@@ -452,6 +673,10 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
 
             foreach (var environment in settings.GetSortedEnvironments())
             {
+                // Resolved rather than declared: an agent editing one environment needs to see the
+                // values a build would actually use, inheritance included.
+                var versioning = ConfigResolver.ResolveVersioning(settings, environment, null);
+
                 description.environments.Add(new EnvironmentDescription
                 {
                     id = environment.Id,
@@ -462,13 +687,19 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                     requireConfirmation = environment.RequireConfirmation,
                     addedDefines = environment.GetAddedDefines().ToArray(),
                     removedDefines = environment.GetRemovedDefines().ToArray(),
-                    productNameOverride = environment.ProductNameOverride ?? string.Empty,
-                    companyNameOverride = environment.CompanyNameOverride ?? string.Empty,
-                    applicationIdentifierOverride = environment.ApplicationIdentifierOverride ?? string.Empty,
-                    applicationIconOverride = environment.ApplicationIconOverride != null
-                        ? AssetDatabase.GetAssetPath(environment.ApplicationIconOverride)
+                    productNameOverride = ConfigResolver.ResolveProductName(settings, environment) ?? string.Empty,
+                    companyNameOverride = ConfigResolver.ResolveCompanyName(settings, environment) ?? string.Empty,
+                    applicationIdentifierOverride =
+                        ConfigResolver.ResolveApplicationIdentifier(settings, environment) ?? string.Empty,
+                    applicationIconOverride = ConfigResolver.ResolveApplicationIcon(settings, environment) != null
+                        ? AssetDatabase.GetAssetPath(ConfigResolver.ResolveApplicationIcon(settings, environment))
                         : string.Empty,
-                    variables = environment.Variables.Select(variable => variable.key + "=" + variable.value).ToArray(),
+                    overridesVersioning = environment.OverridesVersioning,
+                    versioning = versioning.IsOwned
+                        ? $"{versioning.Config.Describe()} (from {versioning.OwnerLabel})"
+                        : "not managed",
+                    variables = ConfigResolver.ResolveVariables(settings, environment)
+                        .Select(variable => variable.key + "=" + variable.value).ToArray(),
                     configKeys = environment.ConfigAssets.Select(entry => entry.key).ToArray(),
                     actionCounts = $"onActivate={environment.OnActivateSteps.Count}, "
                                    + $"preBuild={environment.PreBuildSteps.Count}, "
@@ -478,6 +709,8 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
 
             foreach (var profile in settings.Profiles.Where(profile => profile != null))
             {
+                var versioning = ConfigResolver.ResolveVersioning(settings, settings.ActiveEnvironment, profile);
+
                 description.profiles.Add(new ProfileDescription
                 {
                     id = profile.Id,
@@ -485,7 +718,11 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                     assetPath = AssetDatabase.GetAssetPath(profile),
                     target = profile.Target.ToString(),
                     enabled = profile.Enabled,
-                    defaultEnvironment = profile.DefaultEnvironment != null ? profile.DefaultEnvironment.Id : string.Empty
+                    defaultEnvironment = profile.DefaultEnvironment != null ? profile.DefaultEnvironment.Id : string.Empty,
+                    overridesVersioning = profile.OverridesVersioning,
+                    versioning = versioning.IsOwned
+                        ? $"{versioning.Config.Describe()} (from {versioning.OwnerLabel})"
+                        : "not managed"
                 });
             }
 
@@ -545,10 +782,15 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
             return true;
         }
 
-        private static bool WriteVariables(SerializedObject serialized, CommandLineArgs arguments, out string error)
+        /// <summary>
+        /// Merges <c>-bmkVars</c> into a variable list, wherever it lives — an environment's own list,
+        /// or the shared list in the common configuration.
+        /// </summary>
+        /// <param name="array">The variable array, on an environment or the common configuration.</param>
+        /// <param name="arguments">Parsed command line.</param>
+        /// <param name="error">Set when an entry is not in <c>key=value</c> form.</param>
+        private static bool WriteVariables(SerializedProperty array, CommandLineArgs arguments, out string error)
         {
-            var array = serialized.FindProperty("m_Variables");
-
             if (arguments.GetBool("bmkClearVars"))
                 array.arraySize = 0;
 
@@ -600,17 +842,13 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
         /// restored with the rest of the player settings afterwards, so it never leaks into a
         /// production player.
         /// </summary>
-        /// <param name="serialized">The environment being edited.</param>
-        /// <param name="assetPath">Texture asset path, or empty to clear the override.</param>
+        /// <param name="reference">The texture reference, on an environment or the common configuration.</param>
+        /// <param name="assetPath">Texture asset path, or empty to clear it.</param>
         /// <param name="error">Set when the asset is missing or not a texture.</param>
-        private static bool WriteIcon(SerializedObject serialized, string assetPath, out string error)
+        private static bool WriteIcon(SerializedProperty reference, string assetPath, out string error)
         {
-            var toggle = serialized.FindProperty("m_OverrideApplicationIcon");
-            var reference = serialized.FindProperty("m_ApplicationIcon");
-
             if (string.IsNullOrEmpty(assetPath))
             {
-                toggle.boolValue = false;
                 reference.objectReferenceValue = null;
                 error = null;
                 return true;
@@ -629,7 +867,6 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                 return false;
             }
 
-            toggle.boolValue = true;
             reference.objectReferenceValue = texture;
             error = null;
             return true;
@@ -639,21 +876,18 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
         /// Writes a "boolean plus value" override pair. An empty value clears the override, which
         /// is the only way to undo one from the command line.
         /// </summary>
+        /// <param name="arguments">Parsed command line.</param>
+        /// <param name="argument">Command line name to read.</param>
+        /// <param name="value">The field to write, on an environment or the common configuration.</param>
         private static void WriteOptionalOverride(
-            SerializedObject serialized,
             CommandLineArgs arguments,
             string argument,
-            string toggleProperty,
-            string valueProperty)
+            SerializedProperty value)
         {
             if (!arguments.Has(argument))
                 return;
 
-            var value = arguments.GetString(argument, string.Empty);
-            var enabled = !string.IsNullOrEmpty(value);
-
-            serialized.FindProperty(toggleProperty).boolValue = enabled;
-            serialized.FindProperty(valueProperty).stringValue = value;
+            value.stringValue = arguments.GetString(argument, string.Empty);
         }
 
         private static void WriteConfigEntry(
@@ -786,6 +1020,11 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
         {
             public string settingsAssetPath;
             public string activeEnvironment;
+
+            /// <summary>The values every environment starts from.</summary>
+            public string common;
+
+            public string commonVersioning;
             public string activeBuildTarget;
             public bool healthy;
             public string[] healthIssues = Array.Empty<string>();
@@ -807,11 +1046,21 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
             public bool requireConfirmation;
             public string[] addedDefines = Array.Empty<string>();
             public string[] removedDefines = Array.Empty<string>();
+
+            /// <summary>The values in effect, which for a non-base environment may be inherited.</summary>
             public string productNameOverride;
+
             public string companyNameOverride;
             public string applicationIdentifierOverride;
             public string applicationIconOverride;
+            public bool overridesVersioning;
+
+            /// <summary>The versioning a build of this environment would use, and where it comes from.</summary>
+            public string versioning;
+
+            /// <summary>Resolved variables: the base environment's with this environment's on top.</summary>
             public string[] variables = Array.Empty<string>();
+
             public string[] configKeys = Array.Empty<string>();
             public string actionCounts;
         }
@@ -826,6 +1075,8 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
             public string target;
             public bool enabled;
             public string defaultEnvironment;
+            public bool overridesVersioning;
+            public string versioning;
         }
 
         /// <summary>One queue inside <see cref="ProjectDescription"/>.</summary>

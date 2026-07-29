@@ -15,7 +15,7 @@ namespace BuildManagerKit.Editor
     /// in the Editor matches what you ship.
     /// </summary>
     [CreateAssetMenu(menuName = "Build Manager Kit/Build Environment", fileName = "Env_New", order = 101)]
-    public sealed class BuildEnvironment : ScriptableObject
+    public sealed class BuildEnvironment : ScriptableObject, ISerializationCallbackReceiver
     {
         [Header("Identity")]
         [Tooltip("Stable identifier used by the command line (-bmkEnv) and by BuildInfo.Current.EnvironmentId.")]
@@ -44,29 +44,44 @@ namespace BuildManagerKit.Editor
         [SerializeField] private string[] m_RemovedScriptingDefines = Array.Empty<string>();
 
         [Header("Player Setting Overrides")]
-        [SerializeField] private bool m_OverrideProductName;
+        [Tooltip("Product name for this environment. Empty takes the common configuration's value.")]
         [SerializeField] private string m_ProductName = string.Empty;
 
-        [SerializeField] private bool m_OverrideCompanyName;
+        [Tooltip("Company name for this environment. Empty takes the common configuration's value.")]
         [SerializeField] private string m_CompanyName = string.Empty;
 
-        [Tooltip("Overrides the bundle/package identifier for the target being built, e.g. com.studio.game.dev.")]
-        [SerializeField] private bool m_OverrideApplicationIdentifier;
+        [Tooltip("Bundle/package identifier for the target being built, e.g. com.studio.game.dev. "
+                 + "Empty takes the common configuration's value.")]
         [SerializeField] private string m_ApplicationIdentifier = string.Empty;
 
-        [Tooltip("Forces development builds on or off regardless of what the profile asks for.")]
+        [Tooltip("Forces development builds on or off regardless of what the profile asks for. "
+                 + "Inherit takes the common configuration's answer.")]
         [SerializeField] private OptionalBool m_ForceDevelopmentBuild = OptionalBool.Inherit;
 
         [Tooltip("Replace the application icon while this environment is active — a badged or tinted icon "
                  + "makes it obvious which flavour is installed on a device. Restored with the rest of the "
-                 + "player settings when a build finishes.")]
-        [SerializeField] private bool m_OverrideApplicationIcon;
-
-        [Tooltip("Texture used for every application icon slot of the target being built.")]
+                 + "player settings when a build finishes. Empty takes the common configuration's icon.")]
         [SerializeField] private Texture2D m_ApplicationIcon;
 
+        // The overrides used to be a checkbox beside each field. They are kept, hidden, only so an
+        // asset authored before 1.2 can be folded into the "a value means an override" rule once:
+        // a value left behind by an unchecked box would otherwise start overriding on its own.
+        [SerializeField, HideInInspector] private bool m_OverridesMigrated;
+        [SerializeField, HideInInspector] private bool m_OverrideProductName;
+        [SerializeField, HideInInspector] private bool m_OverrideCompanyName;
+        [SerializeField, HideInInspector] private bool m_OverrideApplicationIdentifier;
+        [SerializeField, HideInInspector] private bool m_OverrideApplicationIcon;
+
+        [Header("Versioning")]
+        [Tooltip("Version this environment differently from the project's common configuration. Off inherits "
+                 + "the base environment's versioning.")]
+        [SerializeField] private bool m_OverrideVersioning;
+
+        [SerializeField] private VersioningConfig m_Versioning = new VersioningConfig();
+
         [Header("Runtime Variables")]
-        [Tooltip("Baked into BuildInfo and readable at runtime through BuildInfo.Current.GetVariable(key).")]
+        [Tooltip("Baked into BuildInfo and readable at runtime through BuildInfo.Current.GetVariable(key). "
+                 + "Merged over the base environment's variables, so a shared value is declared once there.")]
         [SerializeField] private List<BuildVariable> m_Variables = new List<BuildVariable>();
 
         [Header("Config Assets")]
@@ -101,26 +116,46 @@ namespace BuildManagerKit.Editor
         /// <summary>When true the UI asks for confirmation before activating or building.</summary>
         public bool RequireConfirmation => m_RequireConfirmation;
 
-        /// <summary>Override for <c>PlayerSettings.productName</c>, or null when not overridden.</summary>
-        public string ProductNameOverride => m_OverrideProductName ? m_ProductName : null;
+        /// <summary>
+        /// Override for <c>PlayerSettings.productName</c>, or null when this environment leaves it to
+        /// the common configuration. A blank field is what "leave it" looks like.
+        /// </summary>
+        public string ProductNameOverride => Value(m_ProductName);
 
-        /// <summary>Override for <c>PlayerSettings.companyName</c>, or null when not overridden.</summary>
-        public string CompanyNameOverride => m_OverrideCompanyName ? m_CompanyName : null;
+        /// <summary>Override for <c>PlayerSettings.companyName</c>, or null when left to the common one.</summary>
+        public string CompanyNameOverride => Value(m_CompanyName);
 
-        /// <summary>Override for the application identifier, or null when not overridden.</summary>
-        public string ApplicationIdentifierOverride =>
-            m_OverrideApplicationIdentifier ? m_ApplicationIdentifier : null;
+        /// <summary>Override for the application identifier, or null when left to the common one.</summary>
+        public string ApplicationIdentifierOverride => Value(m_ApplicationIdentifier);
 
         /// <summary>Development build override applied on top of the profile setting.</summary>
         public OptionalBool ForceDevelopmentBuild => m_ForceDevelopmentBuild;
 
         /// <summary>
-        /// Application icon applied while this environment is active, or null when the project
-        /// icon is kept.
+        /// Application icon applied while this environment is active, or null when the common
+        /// configuration's icon — or the project icon — is kept.
         /// </summary>
-        public Texture2D ApplicationIconOverride => m_OverrideApplicationIcon ? m_ApplicationIcon : null;
+        public Texture2D ApplicationIconOverride => m_ApplicationIcon;
 
-        /// <summary>Runtime key/value pairs baked into <see cref="BuildInfo"/>.</summary>
+        /// <summary>
+        /// True when this environment versions differently from the common configuration held by the
+        /// base environment. On the base environment itself this is what switches the project's
+        /// common versioning on.
+        /// </summary>
+        public bool OverridesVersioning => m_OverrideVersioning;
+
+        /// <summary>
+        /// This environment's versioning block. Only in effect when
+        /// <see cref="OverridesVersioning"/> is true — use
+        /// <see cref="ConfigResolver.ResolveVersioning"/> to get the block a run actually uses.
+        /// </summary>
+        public VersioningConfig Versioning => m_Versioning;
+
+        /// <summary>
+        /// Runtime key/value pairs declared by this environment, before the base environment's are
+        /// merged in. Baked into <see cref="BuildInfo"/> via
+        /// <see cref="ConfigResolver.ResolveVariables"/>.
+        /// </summary>
         public IReadOnlyList<BuildVariable> Variables => m_Variables;
 
         /// <summary>
@@ -203,8 +238,55 @@ namespace BuildManagerKit.Editor
         internal List<BuildStep> PreBuildStepsMutable => m_PreBuildSteps;
         internal List<BuildStep> PostBuildStepsMutable => m_PostBuildSteps;
 
+        /// <summary>
+        /// A fresh environment has nothing to migrate — its fields are empty, which already means
+        /// "take the common value".
+        /// </summary>
+        private void Awake() => m_OverridesMigrated = true;
+
+        /// <inheritdoc />
+        public void OnBeforeSerialize()
+        {
+        }
+
+        /// <summary>Migrates an environment that has just been read from disk.</summary>
+        public void OnAfterDeserialize() => MigrateOverrides();
+
+        /// <summary>
+        /// Folds a pre-1.2 environment's override checkboxes into the fields themselves, once.
+        ///
+        /// A field whose box was unchecked contributed nothing, so it is cleared: leaving the text in
+        /// place would turn a value someone had abandoned into a live override the moment the boxes
+        /// disappeared. The one case that cannot survive is "override with an empty value", which used
+        /// to mean "no product name at all" and now means "take the common one".
+        ///
+        /// Runs during deserialization, so it touches nothing but its own fields.
+        /// </summary>
+        internal void MigrateOverrides()
+        {
+            if (m_OverridesMigrated)
+                return;
+
+            m_OverridesMigrated = true;
+
+            if (!m_OverrideProductName)
+                m_ProductName = string.Empty;
+
+            if (!m_OverrideCompanyName)
+                m_CompanyName = string.Empty;
+
+            if (!m_OverrideApplicationIdentifier)
+                m_ApplicationIdentifier = string.Empty;
+
+            if (!m_OverrideApplicationIcon)
+                m_ApplicationIcon = null;
+        }
+
+        private static string Value(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
         private void OnValidate()
         {
+            m_Versioning ??= new VersioningConfig();
             m_Variables ??= new List<BuildVariable>();
             m_ConfigAssets ??= new List<EnvironmentAssetEntry>();
             m_OnActivateSteps ??= new List<BuildStep>();

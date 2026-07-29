@@ -19,6 +19,7 @@ namespace BuildManagerKit.Editor
             "m_Profiles",
             "m_Environments",
             "m_Queues",
+            "m_Common",
             "m_GlobalOnActivateSteps",
             "m_GlobalPreBuildSteps",
             "m_GlobalPostBuildSteps"
@@ -34,6 +35,8 @@ namespace BuildManagerKit.Editor
             root.AddToClassList("bmk-scroll");
 
             var serializedObject = new SerializedObject(Settings);
+
+            root.Add(BuildCommonConfigurationCard());
 
             var behaviour = BuildManagerUI.Card(
                 "Behaviour",
@@ -84,6 +87,41 @@ namespace BuildManagerKit.Editor
 
             root.Bind(serializedObject);
             return root;
+        }
+
+        /// <summary>
+        /// A read-only summary of the common configuration, pointing at the Environments tab where it
+        /// is edited.
+        ///
+        /// It is summarised rather than repeated here: two editable copies of the same block invite
+        /// the question of which one is authoritative, and the values belong next to the environments
+        /// that override them.
+        /// </summary>
+        private VisualElement BuildCommonConfigurationCard()
+        {
+            var common = Settings.Common;
+
+            var card = BuildManagerUI.Card(
+                "Common configuration",
+                "The settings that are the same in every environment — product and company name, bundle "
+                + "identifier, icon, shared runtime variables and versioning. Every environment starts from "
+                + "them and overrides only what differs, so a rename is one edit. A profile that versions "
+                + "itself still wins over both.");
+
+            card.Add(BuildManagerUI.KeyValue("Shared values",
+                common.IsConfigured ? common.Describe() : "nothing shared yet"));
+
+            var edit = new Button(() => BuildManagerWindow.Open("Environments"))
+            {
+                text = "Edit In Environments Tab",
+                tooltip = "The panel at the top of the Environments tab, above the environment list."
+            };
+
+            edit.style.alignSelf = Align.FlexStart;
+            edit.style.marginTop = 6;
+            card.Add(edit);
+
+            return card;
         }
 
         private VisualElement BuildAgentSkillCard()

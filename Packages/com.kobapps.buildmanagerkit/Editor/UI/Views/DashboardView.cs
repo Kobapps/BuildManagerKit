@@ -114,16 +114,26 @@ namespace BuildManagerKit.Editor
             if (environment != null)
             {
                 var defines = environment.GetAddedDefines().ToArray();
+                var variables = ConfigResolver.ResolveVariables(Settings, environment);
+                var identifier = ConfigResolver.ResolveApplicationIdentifier(Settings, environment);
+
                 card.Add(BuildManagerUI.KeyValue("Id", environment.Id));
                 card.Add(BuildManagerUI.KeyValue("Defines",
                     defines.Length > 0 ? string.Join("  ", defines) : "none"));
+
+                // Resolved rather than declared: what shipped code sees is the base environment's
+                // variables with this environment's on top.
                 card.Add(BuildManagerUI.KeyValue("Runtime variables",
-                    environment.Variables.Count > 0
-                        ? string.Join(", ", environment.Variables.Select(variable => variable.key))
+                    variables.Count > 0
+                        ? string.Join(", ", variables.Select(variable => variable.key))
                         : "none"));
 
-                if (!string.IsNullOrEmpty(environment.ApplicationIdentifierOverride))
-                    card.Add(BuildManagerUI.KeyValue("Bundle id", environment.ApplicationIdentifierOverride));
+                if (!string.IsNullOrEmpty(identifier))
+                    card.Add(BuildManagerUI.KeyValue("Bundle id", identifier));
+
+                var inheritance = ConfigResolver.DescribeInheritance(Settings, environment);
+                if (!string.IsNullOrEmpty(inheritance))
+                    card.Add(BuildManagerUI.Muted(inheritance));
             }
 
             var row = new VisualElement();
@@ -241,6 +251,8 @@ namespace BuildManagerKit.Editor
 
             var environment = Settings.ActiveEnvironment;
             var preview = BuildOutputPreview(profile, environment);
+            var git = GitInfo.Read();
+            var versioning = ConfigResolver.ResolveVersioning(Settings, environment, profile);
 
             card.Add(BuildManagerUI.KeyValue("Profile", $"{profile.DisplayName} · {profile.Target}"));
             card.Add(BuildManagerUI.KeyValue("Environment",
@@ -248,16 +260,23 @@ namespace BuildManagerKit.Editor
                 environment != null ? environment.Color : (Color?)null));
             card.Add(BuildManagerUI.KeyValue("Scenes", profile.ResolveScenePaths().Length.ToString()));
             card.Add(BuildManagerUI.KeyValue("Version",
-                $"{VersionService.Resolve(profile, GitInfo.Read(), null)} "
-                + $"(build {VersionService.ResolveBuildNumber(profile, GitInfo.Read())})"));
+                $"{VersionService.Resolve(versioning.Config, git, null)} "
+                + $"(build {VersionService.ResolveBuildNumber(versioning.Config, git)}) "
+                + $"· from {versioning.OwnerLabel}"));
             card.Add(BuildManagerUI.KeyValue("Output", preview));
 
             var actions = new VisualElement();
             actions.AddToClassList("bmk-row");
             actions.style.marginTop = 8;
 
-            var buildButton = BuildManagerUI.PrimaryButton("Build", () => Window.BuildSelected(false));
-            buildButton.SetEnabled(!BuildRunner.IsRunning);
+            var buildButton = BuildManagerUI.BuildSplitButton(
+                "Build " + profile.DisplayName,
+                () => Window.BuildSelected(false),
+                Window.ShowBuildMenu,
+                !BuildRunner.IsRunning,
+                $"Build '{profile.DisplayName}' for {profile.Target}.");
+            buildButton.style.marginLeft = 0;
+            buildButton.style.marginRight = 4;
 
             var dryRun = new Button(() => Window.BuildSelected(true)) { text = "Dry Run" };
             dryRun.SetEnabled(!BuildRunner.IsRunning);
@@ -340,13 +359,14 @@ namespace BuildManagerKit.Editor
             return card;
         }
 
-        private static string BuildOutputPreview(BuildTargetProfile profile, BuildEnvironment environment)
+        private string BuildOutputPreview(BuildTargetProfile profile, BuildEnvironment environment)
         {
             try
             {
                 var git = GitInfo.Read();
-                var version = VersionService.Resolve(profile, git, null);
-                var number = VersionService.ResolveBuildNumber(profile, git);
+                var versioning = ConfigResolver.ResolveVersioning(Settings, environment, profile).Config;
+                var version = VersionService.Resolve(versioning, git, null);
+                var number = VersionService.ResolveBuildNumber(versioning, git);
 
                 // Ordinal: {env} and {ENV} are distinct tokens.
                 var tokens = new System.Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal)

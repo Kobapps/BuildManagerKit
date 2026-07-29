@@ -1,4 +1,4 @@
-#if UNITY_6000_5_OR_NEWER
+#if UNITY_6000_4_OR_NEWER
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,8 +18,10 @@ namespace BuildManagerKit.Editor
     /// element for the Build Manager window and the other shortcuts; drag it elsewhere on the
     /// toolbar with Unity's own customisation, or hide it entirely.
     ///
-    /// Requires Unity 6.5, which introduced the main toolbar extension API. On older versions the
-    /// Scene view overlay and the <c>Tools ▸ Build Manager Kit</c> menu cover the same ground.
+    /// Requires Unity 6.4 or newer, which is where the main toolbar extension API
+    /// (<c>UnityEditor.Toolbars.MainToolbarElement</c>) is available. On older versions the element is
+    /// compiled out and the Scene view overlay and the <c>Tools ▸ Build Manager Kit</c> menu cover the
+    /// same ground — so if the pill is missing in a project, check its Editor version first.
     /// </summary>
     internal static class EnvironmentToolbar
     {

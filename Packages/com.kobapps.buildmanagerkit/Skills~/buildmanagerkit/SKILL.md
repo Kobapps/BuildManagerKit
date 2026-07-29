@@ -59,9 +59,9 @@ Exit codes: `0` success · `1` build or health check failed · `2` usage error �
          -bmkResultFile bmk-state.json -logFile -
 ```
 
-`bmk-state.json` lists every environment id, its defines, variables and published config keys,
-every profile, every queue, and the current health check. Read it before editing anything —
-never guess an id.
+`bmk-state.json` lists every environment id, its defines, variables and published config keys, the
+common configuration, the versioning each environment and profile resolves to, every profile, every
+queue, and the current health check. Read it before editing anything — never guess an id.
 
 ## Environments
 
@@ -87,22 +87,57 @@ Delete: `ConfigCLI.DeleteEnvironment -bmkEnv qa`.
 Switch the active environment (applies defines, player settings and the on-activate actions
 exactly as a build would): `BuildCLI.SwitchEnvironment -bmkEnv qa`.
 
-### Rules that will bite you
+## The common configuration
 
-- **The id must be a plain identifier** — lower case letters, digits, underscores, not starting
-  with a digit. It becomes the `ENV_<ID>` preprocessor symbol and part of a filename. `my-env`
-  is rejected, because `ENV_MY-ENV` does not compile. `CreateEnvironment` enforces this.
-- **`-bmkDefines` replaces the whole list**, it does not append. Read the current list from
-  `Describe` and pass the full set.
-- **Sharing a define between environments is fine.** Switching strips every define contributed by
-  *any* environment and then adds the incoming one's, so a define listed on both `dev` and `qa` is
-  active whenever either is — which is how you express "non-production". What is *not* fine is two
-  ids that sanitize to the same generated `ENV_<ID>` (`my-env` and `my_env`); the health check
-  reports that as an error because runtime code cannot tell them apart.
-- **Every environment should publish the same config keys.** A key that only some environments
-  provide is a `null` at runtime on the others. The health check warns about it.
-- **Passing an empty string clears an override**: `-bmkProductName ""` removes the product-name
-  override rather than setting it to empty.
+The values that are the same in every environment — product and company name, bundle identifier,
+icon, shared runtime variables and versioning — live in one block on the settings asset, edited with
+`ConfigCLI.SetCommon`. Every environment starts from them and overrides only what differs.
+`Describe` reports the block as `common`, and each environment's reported values are the resolved
+ones, shared values included.
+
+```bash
+# The shared values
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetCommon \
+  -bmkCompanyName "Studio" -bmkAppIdentifier com.studio.game \
+  -bmkVars "log_level=info"
+
+# qa differs only in the identifier; company and log_level come from the common block
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetEnvironment \
+  -bmkEnv qa -bmkAppIdentifier com.studio.game.qa
+```
+
+- Precedence is most-specific-wins: **profile over environment over common**.
+- There are no override switches: a field with a value overrides, an empty field takes the common
+  value. `-bmkProductName ""` on an environment therefore means "use the common product name", and the
+  same argument on `SetCommon` means "do not manage the product name at all".
+- Defines and action lists are **not** shared this way. Shared defines are listed per environment
+  (they may overlap), shared actions belong in the settings asset's global action lists, and shared
+  config assets in its global config assets.
+
+## Versioning
+
+Versioning lives in the common configuration by default, and both halves are optional:
+
+```bash
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetCommon \
+  -bmkVersion 1.4.2 -bmkBuildNumberPolicy AutoIncrementOnSuccess
+
+# read the version from a file instead, and let CI own the build number
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetCommon \
+  -bmkVersionFile version.txt -bmkManageBuildNumber false
+```
+
+- `-bmkManageVersion false` leaves `PlayerSettings.bundleVersion` alone; `-bmkManageBuildNumber
+  false` leaves the Android `versionCode` and the iOS/macOS build number alone. Use them when
+  something outside Unity stamps those values.
+- `-bmkVersionFile <path>` reads the first non-empty line of that file and writes bumps back to it;
+  `-bmkVersionFile ""` or `-bmkNoVersionFile` switches it off. It is a toggle, not a source — do not
+  pass `-bmkVersionSource VersionFile`, which is rejected.
+- An environment can version differently with `SetEnvironment -bmkOverrideVersioning true` plus the
+  same versioning arguments; `-bmkOverrideVersioning false` hands versioning back to the common block.
+- The `AutoIncrementOnSuccess` counter lives on whichever asset owns the block — the settings asset
+  for the shared one — and `Describe` reports which. A build number passed to `BuildCLI.Build` with
+  `-bmkBuildNumber` is used as-is and leaves the counter alone.
 
 ## Per-environment config assets
 

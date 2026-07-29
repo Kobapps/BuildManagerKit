@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 
@@ -33,6 +34,7 @@ namespace BuildManagerKit.Editor
 
             CheckForMultipleSettingsAssets(report);
             CheckNullEntries(settings, report);
+            CheckCommonConfig(settings, report);
             CheckDuplicateIds(settings, report);
             CheckEnvironmentDefines(settings, report);
             CheckOutputCollisions(settings, report);
@@ -71,6 +73,48 @@ namespace BuildManagerKit.Editor
             if (missingEnvironments > 0)
                 report.AddWarning(
                     $"{missingEnvironments} environment slot(s) point at a deleted asset. Use Rescan to tidy up.");
+        }
+
+        /// <summary>
+        /// The common configuration feeds every environment, so a half-finished switch there is a
+        /// mistake that shows up in every flavour at once.
+        /// </summary>
+        private static void CheckCommonConfig(BuildManagerSettings settings, BuildValidationReport report)
+        {
+            var common = settings.Common;
+            if (common == null)
+                return;
+
+            if (common.variables != null)
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var variable in common.variables)
+                {
+                    if (string.IsNullOrWhiteSpace(variable.key))
+                    {
+                        report.AddWarning("A common runtime variable has no key and will not be baked in.");
+                        continue;
+                    }
+
+                    if (!seen.Add(variable.key.Trim()))
+                        report.AddWarning(
+                            $"The common runtime variable '{variable.key.Trim()}' is declared twice; only one "
+                            + "of them is baked in.");
+                }
+            }
+
+            var versioning = common.versioning;
+            if (versioning == null)
+                return;
+
+            // A version file that is not there resolves to the PlayerSettings value at build time,
+            // which looks like the file being ignored rather than missing.
+            if (versioning.manageVersion && versioning.ReadsVersionFile &&
+                !File.Exists(ProjectPaths.MakeAbsolute(versioning.versionFilePath)))
+                report.AddWarning(
+                    $"The common configuration reads its version from '{versioning.versionFilePath}', which does "
+                    + "not exist. Builds will fall back to PlayerSettings.bundleVersion.");
         }
 
         private static void CheckDuplicateIds(BuildManagerSettings settings, BuildValidationReport report)

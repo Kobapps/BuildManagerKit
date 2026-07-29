@@ -16,7 +16,7 @@ namespace BuildManagerKit.Editor
     /// variables.
     /// </summary>
     [CreateAssetMenu(menuName = "Build Manager Kit/Build Profile", fileName = "Profile_New", order = 100)]
-    public sealed class BuildTargetProfile : ScriptableObject
+    public sealed class BuildTargetProfile : ScriptableObject, ISerializationCallbackReceiver
     {
         [Serializable]
         public sealed class AndroidOptions
@@ -119,18 +119,24 @@ namespace BuildManagerKit.Editor
         [SerializeField] private IosOptions m_Ios = new IosOptions();
 
         [Header("Versioning")]
-        [SerializeField] private VersionSource m_VersionSource = VersionSource.PlayerSettings;
+        [Tooltip("Version this profile differently from the project's common configuration. Off inherits the "
+                 + "environment's versioning, which normally comes from the base environment.")]
+        [SerializeField] private bool m_OverrideVersioning;
 
-        [Tooltip("Used when Version Source is Profile.")]
-        [SerializeField] private string m_Version = "1.0.0";
+        [SerializeField] private VersioningConfig m_Versioning = new VersioningConfig();
 
-        [Tooltip("Used when Version Source is Version File. Path is relative to the project root.")]
-        [SerializeField] private string m_VersionFilePath = "version.txt";
+        // Versioning used to live in five flat fields on the profile. They are kept, hidden, purely
+        // so an asset authored before 1.2 can be folded into m_Versioning once — dropping them would
+        // silently reset a project's build counters to 1.
+        [SerializeField, HideInInspector] private bool m_VersioningMigrated;
+        [SerializeField, HideInInspector] private VersionSource m_VersionSource = VersionSource.PlayerSettings;
+        [SerializeField, HideInInspector] private string m_Version = "1.0.0";
+        [SerializeField, HideInInspector] private string m_VersionFilePath = "version.txt";
 
-        [SerializeField] private BuildNumberPolicy m_BuildNumberPolicy = BuildNumberPolicy.AutoIncrementOnSuccess;
+        [SerializeField, HideInInspector]
+        private BuildNumberPolicy m_BuildNumberPolicy = BuildNumberPolicy.AutoIncrementOnSuccess;
 
-        [Tooltip("Current counter. Applied to Android versionCode and iOS build number.")]
-        [SerializeField] private int m_BuildNumber = 1;
+        [SerializeField, HideInInspector] private int m_BuildNumber = 1;
 
         [Header("Environments")]
         [Tooltip("Leave empty to allow every environment.")]
@@ -202,23 +208,34 @@ namespace BuildManagerKit.Editor
         /// <summary>iOS specific options.</summary>
         public IosOptions Ios => m_Ios;
 
-        /// <summary>Where the version string comes from.</summary>
-        public VersionSource VersionSource => m_VersionSource;
+        /// <summary>
+        /// True when this profile versions differently from the project's common configuration.
+        /// </summary>
+        public bool OverridesVersioning => m_OverrideVersioning;
+
+        /// <summary>
+        /// This profile's versioning block. Only in effect when <see cref="OverridesVersioning"/> is
+        /// true — use <see cref="ConfigResolver.ResolveVersioning"/> to get the block a run uses.
+        /// </summary>
+        public VersioningConfig Versioning => m_Versioning;
+
+        /// <summary>Where this profile's version string comes from when it overrides versioning.</summary>
+        public VersionSource VersionSource => m_Versioning.source;
 
         /// <summary>Explicit version used when <see cref="VersionSource"/> is <c>Profile</c>.</summary>
-        public string Version => m_Version;
+        public string Version => m_Versioning.version;
 
         /// <summary>Project relative path of the version file.</summary>
-        public string VersionFilePath => m_VersionFilePath;
+        public string VersionFilePath => m_Versioning.versionFilePath;
 
-        /// <summary>How the build number is produced.</summary>
-        public BuildNumberPolicy BuildNumberPolicy => m_BuildNumberPolicy;
+        /// <summary>How this profile's build number is produced when it overrides versioning.</summary>
+        public BuildNumberPolicy BuildNumberPolicy => m_Versioning.buildNumberPolicy;
 
         /// <summary>The stored build counter.</summary>
         public int BuildNumber
         {
-            get => m_BuildNumber;
-            internal set => m_BuildNumber = value;
+            get => m_Versioning.buildNumber;
+            internal set => m_Versioning.buildNumber = value;
         }
 
         /// <summary>Environments this profile is allowed to build with. Empty means all.</summary>
@@ -309,13 +326,87 @@ namespace BuildManagerKit.Editor
             return options;
         }
 
+        /// <summary>
+        /// A fresh instance has nothing to migrate: it is a new profile, not a pre-1.2 asset, so it
+        /// starts out taking versioning from the common configuration.
+        ///
+        /// <see cref="Awake"/> runs for an object built by <c>CreateInstance</c> — including the
+        /// Assets ▸ Create menu — while a profile loaded from disk arrives through
+        /// <see cref="OnAfterDeserialize"/>. That is the only reliable way to tell the two apart:
+        /// their field values are identical.
+        /// </summary>
+        private void Awake() => m_VersioningMigrated = true;
+
+        /// <inheritdoc />
+        public void OnBeforeSerialize()
+        {
+        }
+
+        /// <summary>
+        /// Migrates a profile that has just been read from disk. Deserialization is what identifies a
+        /// pre-1.2 asset, and it is also the moment before anything can read the block.
+        /// </summary>
+        public void OnAfterDeserialize() => MigrateVersioning();
+
+        /// <summary>
+        /// Folds a pre-1.2 profile's flat versioning fields into <see cref="Versioning"/>, once.
+        ///
+        /// A profile that used to carry its own version source and counter keeps doing exactly that,
+        /// so the migration turns the override on: taking the common configuration instead would
+        /// change what the next build stamps. Only brand new profiles start out sharing it.
+        ///
+        /// Called during deserialization, so it touches nothing but its own fields — no
+        /// <c>AssetDatabase</c>, no <c>SetDirty</c>. The flag reaches disk with the next save of the
+        /// asset, and until then the migration simply produces the same result again.
+        /// </summary>
+        internal void MigrateVersioning()
+        {
+            if (m_VersioningMigrated)
+                return;
+
+            m_VersioningMigrated = true;
+            m_OverrideVersioning = true;
+            m_Versioning ??= new VersioningConfig();
+
+            m_Versioning.manageVersion = true;
+            m_Versioning.manageBuildNumber = true;
+            m_Versioning.version = m_Version;
+            m_Versioning.versionFilePath = m_VersionFilePath;
+            m_Versioning.buildNumberPolicy = m_BuildNumberPolicy;
+            m_Versioning.buildNumber = Mathf.Max(0, m_BuildNumber);
+
+            // The version file used to be one of the sources; it is a toggle of its own now, so the
+            // source keeps its meaning as "where the version comes from when no file is involved".
+            if (m_VersionSource == VersionSource.VersionFile)
+            {
+                m_Versioning.useVersionFile = true;
+                m_Versioning.source = VersionSource.PlayerSettings;
+            }
+            else
+            {
+                m_Versioning.source = m_VersionSource;
+            }
+        }
+
+        /// <summary>
+        /// Marks a profile as already migrated, so it starts out taking versioning from the common
+        /// configuration instead of being treated as a pre-1.2 asset. Used by the code that creates
+        /// profiles; <see cref="Awake"/> covers everything else.
+        /// </summary>
+        internal void SkipVersioningMigration()
+        {
+            m_VersioningMigrated = true;
+            m_OverrideVersioning = false;
+        }
+
         private void OnValidate()
         {
             m_Scenes ??= new List<SceneAsset>();
             m_AllowedEnvironments ??= new List<BuildEnvironment>();
             m_PreBuildSteps ??= new List<BuildStep>();
             m_PostBuildSteps ??= new List<BuildStep>();
-            m_BuildNumber = Mathf.Max(0, m_BuildNumber);
+            m_Versioning ??= new VersioningConfig();
+            m_Versioning.buildNumber = Mathf.Max(0, m_Versioning.buildNumber);
 
             if (string.IsNullOrWhiteSpace(m_Id))
                 m_Id = BuildTokens.Sanitize(name).ToLowerInvariant();

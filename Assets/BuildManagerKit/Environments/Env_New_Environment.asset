@@ -29,7 +29,18 @@ MonoBehaviour:
   m_ForceDevelopmentBuild: 0
   m_OverrideApplicationIcon: 0
   m_ApplicationIcon: {fileID: 0}
+  m_OverrideVersioning: 0
+  m_Versioning:
+    manageVersion: 1
+    source: 0
+    version: 1.0.0
+    useVersionFile: 0
+    versionFilePath: version.txt
+    manageBuildNumber: 1
+    buildNumberPolicy: 1
+    buildNumber: 1
   m_Variables: []
+  m_ConfigAssets: []
   m_OnActivateSteps: []
   m_PreBuildSteps: []
   m_PostBuildSteps: []

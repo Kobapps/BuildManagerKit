@@ -67,6 +67,12 @@ namespace BuildManagerKit.Editor
         [Tooltip("The environment currently applied to the Editor. Change it from the Build Manager window.")]
         [SerializeField] private BuildEnvironment m_ActiveEnvironment;
 
+        [Header("Common Configuration")]
+        [Tooltip("The settings that are the same in every environment — company, product name, bundle "
+                 + "identifier, icon, shared runtime variables and versioning. Environments override only "
+                 + "what differs. Edited at the top of the Environments tab.")]
+        [SerializeField] private CommonBuildConfig m_Common = new CommonBuildConfig();
+
         [Header("Global Config Assets")]
         [Tooltip("Assets published to runtime code for EVERY environment. An environment that lists the "
                  + "same key overrides the default, so shared assets are configured once here.")]
@@ -217,6 +223,15 @@ namespace BuildManagerKit.Editor
                 ActiveEnvironmentChanged?.Invoke(value);
             }
         }
+
+        /// <summary>
+        /// The settings shared by every environment: product and company name, bundle identifier,
+        /// icon, the development build flag, shared runtime variables and versioning.
+        ///
+        /// This is the "configure it in one place" half of environments — each environment states
+        /// only its differences. See <see cref="ConfigResolver"/> for the precedence rules.
+        /// </summary>
+        public CommonBuildConfig Common => m_Common;
 
         internal List<BuildTargetProfile> ProfilesMutable => m_Profiles;
         internal List<BuildEnvironment> EnvironmentsMutable => m_Environments;
@@ -384,6 +399,9 @@ namespace BuildManagerKit.Editor
 
         private void OnValidate()
         {
+            m_Common ??= new CommonBuildConfig();
+            m_Common.variables ??= new List<BuildVariable>();
+            m_Common.versioning ??= new VersioningConfig();
             m_Profiles ??= new List<BuildTargetProfile>();
             m_Environments ??= new List<BuildEnvironment>();
             m_Queues ??= new List<BuildQueue>();

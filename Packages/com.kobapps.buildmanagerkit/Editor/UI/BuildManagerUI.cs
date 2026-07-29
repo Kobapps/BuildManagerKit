@@ -199,6 +199,53 @@ namespace BuildManagerKit.Editor
             return button;
         }
 
+        /// <summary>
+        /// The primary Build control: a wide half that builds what is already selected and a caret
+        /// half that opens a menu of the other targets.
+        ///
+        /// One control rather than a separate selector dropdown — the thing you pick and the thing
+        /// you press are the same decision, and splitting them across the header made two similar
+        /// looking pills that both read as "a platform".
+        /// </summary>
+        /// <param name="text">Label of the main half, e.g. <c>Build Android</c>.</param>
+        /// <param name="onClick">Invoked when the main half is pressed.</param>
+        /// <param name="onDropdown">Invoked with the control's screen rect to anchor a menu.</param>
+        /// <param name="enabled">
+        /// Disables the main half — there is nothing to build, or a build is already running. The
+        /// caret keeps working whenever <paramref name="menuEnabled"/> allows it, because the menu is
+        /// also how a project with no profiles creates its first one.
+        /// </param>
+        /// <param name="tooltip">Tooltip for the main half.</param>
+        /// <param name="menuEnabled">Disables the caret too, e.g. while a build runs.</param>
+        internal static VisualElement BuildSplitButton(
+            string text,
+            Action onClick,
+            Action<Rect> onDropdown,
+            bool enabled = true,
+            string tooltip = null,
+            bool menuEnabled = true)
+        {
+            var container = new VisualElement();
+            container.AddToClassList("bmk-build-button");
+
+            var main = PrimaryButton(text, onClick);
+            main.AddToClassList("bmk-build-button__main");
+            main.tooltip = tooltip;
+            main.SetEnabled(enabled);
+
+            var caret = new Button { text = "▼", tooltip = "Build a specific target" };
+            caret.AddToClassList("bmk-build-button__caret");
+            caret.SetEnabled(menuEnabled);
+
+            // Anchored to the whole control so the menu lines up with the left edge of the label
+            // rather than with the 22px caret.
+            caret.clicked += () => onDropdown?.Invoke(container.worldBound);
+
+            container.Add(main);
+            container.Add(caret);
+            return container;
+        }
+
         /// <summary>The placeholder shown when a list has no entries.</summary>
         internal static VisualElement EmptyState(string message, string actionText = null, Action action = null)
         {

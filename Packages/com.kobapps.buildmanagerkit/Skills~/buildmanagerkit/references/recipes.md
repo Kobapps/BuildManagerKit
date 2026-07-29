@@ -58,13 +58,77 @@ the full set:
 bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv qa -bmkDefines "QA_BUILD;NEW_FLAG"
 ```
 
-## Clear an override
+## Hand a field back to the common configuration
 
-An empty value removes the override rather than setting it to empty:
+There are no override switches — a value overrides, an empty field takes the shared value:
 
 ```bash
 bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv qa -bmkProductName ""
 ```
+
+The same argument on `SetCommon` means something stronger: "do not manage the product name at all",
+leaving `PlayerSettings.productName` as the project has it.
+
+## Move shared settings into the common configuration
+
+When several environments repeat the same company name, identifier prefix or variables, put the value
+in the common block once and drop the duplicates:
+
+```bash
+# 1. What does each environment currently set?
+bmk BuildManagerKit.Editor.ConfigCLI.Describe -bmkResultFile /tmp/bmk.json
+
+# 2. The shared values, versioning included
+bmk BuildManagerKit.Editor.ConfigCLI.SetCommon \
+    -bmkCompanyName "Studio" -bmkVars "log_level=info" \
+    -bmkVersion 1.4.0 -bmkBuildNumberPolicy AutoIncrementOnSuccess
+
+# 3. Drop the now-redundant copies; each of these falls back to the common value
+bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv dev  -bmkCompanyName ""
+bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv qa   -bmkCompanyName ""
+bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv prod -bmkCompanyName ""
+
+# 4. Confirm the resolved values are unchanged, then check health
+bmk BuildManagerKit.Editor.ConfigCLI.Describe -bmkResultFile /tmp/bmk-after.json
+bmk BuildManagerKit.Editor.BuildCLI.Doctor
+```
+
+`Describe` reports resolved values, so `companyNameOverride` should read `Studio` for every
+environment both before and after — that diff being empty is the proof the move was safe.
+
+## Let CI own the version, not Unity
+
+```bash
+# Read the version from a file the release script writes, and never touch the build number
+bmk BuildManagerKit.Editor.ConfigCLI.SetCommon \
+    -bmkVersionFile version.txt -bmkManageBuildNumber false
+```
+
+Or hand both to the build command instead, leaving the configuration alone:
+
+```bash
+bmk BuildManagerKit.Editor.BuildCLI.Build \
+    -bmkProfile android -bmkEnv prod -bmkVersion "$CI_VERSION" -bmkBuildNumber "$CI_PIPELINE_IID"
+```
+
+`-bmkVersion` / `-bmkBuildNumber` on `Build` override the run without editing any asset — and a
+supplied build number leaves the stored counter alone — which is the right choice for CI. `ConfigCLI`
+is for the values a project should keep.
+
+## One environment or platform on its own version
+
+```bash
+# Staging ships a release candidate; everything else stays on the common version
+bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment \
+    -bmkEnv stage -bmkOverrideVersioning true -bmkVersion 1.5.0-rc1
+
+# ...and back to sharing it
+bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment -bmkEnv stage -bmkOverrideVersioning false
+```
+
+There is no CLI verb for per-profile versioning; use the Profiles tab's *Version this profile
+differently* switch when one platform needs its own counter. `Describe` reports each profile's
+`versioning` and which asset it came from, so you can check which level won.
 
 ## Per-environment app icons
 
@@ -74,12 +138,13 @@ bmk BuildManagerKit.Editor.ConfigCLI.SetEnvironment \
 ```
 
 The texture must import as a **Texture2D**, not a Sprite — a Sprite-mode import is the usual cause
-of `-bmkIcon` failing. Pass `-bmkIcon ""` to clear the override.
+of `-bmkIcon` failing. Pass `-bmkIcon ""` to hand the icon back to the common configuration, or set a
+shared one with `SetCommon -bmkIcon <path>`.
 
 The icon is applied when the environment is activated and when it is built, and restored
 afterwards along with the rest of the player settings, so a badged QA icon never leaks into a
-production build. In the window it lives under
-`Environments ▸ <env> ▸ Application icon`, which previews the texture once the override is on.
+production build. In the window it lives under `Environments ▸ <env> ▸ Application icon`, which
+previews the texture in effect — the environment's own, or the shared one when the field is empty.
 
 ## Add per-environment JSON that shipped code reads
 

@@ -16,7 +16,6 @@ MonoBehaviour:
   m_DisplayName: Production
   m_Description: 
   m_Color: {r: 0.25, g: 0.73, b: 0.31, a: 1}
-  m_SortOrder: 2
   m_RequireConfirmation: 1
   m_GenerateEnvironmentDefine: 1
   m_ScriptingDefines: []
@@ -28,13 +27,14 @@ MonoBehaviour:
   m_OverrideApplicationIdentifier: 0
   m_ApplicationIdentifier: 
   m_ForceDevelopmentBuild: 0
-  m_OverrideApplicationIcon: 0
+  m_OverrideApplicationIcon: 1
   m_ApplicationIcon: {fileID: 0}
   m_Variables:
   - key: 
     value: 
   - key: 
     value: 
+  m_ConfigAssets: []
   m_OnActivateSteps:
   - rid: 6714699482356777176
   m_PreBuildSteps: []

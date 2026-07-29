@@ -18,7 +18,11 @@ namespace BuildManagerKit.Editor
 
     /// <summary>
     /// Resolves and applies the version string and build number of a run, according to the
-    /// profile's <see cref="VersionSource"/> and <see cref="BuildNumberPolicy"/>.
+    /// <see cref="VersioningConfig"/> that won — the profile's, the environment's or the common
+    /// configuration's, as decided by <see cref="ConfigResolver.ResolveVersioning"/>.
+    ///
+    /// A block that does not manage the version, or the build number, is honoured: those player
+    /// settings are then left exactly as the project has them.
     /// </summary>
     public static class VersionService
     {
@@ -28,34 +32,38 @@ namespace BuildManagerKit.Editor
 
         /// <summary>
         /// Works out the version string for a run. Falls back to the current
-        /// <c>PlayerSettings.bundleVersion</c> whenever the configured source yields nothing.
+        /// <c>PlayerSettings.bundleVersion</c> whenever the configured source yields nothing, and
+        /// returns it unchanged when the block does not manage the version at all.
         /// </summary>
-        public static string Resolve(BuildTargetProfile profile, GitInfo git, IBuildLog log)
+        /// <param name="versioning">The versioning block in effect, may be null.</param>
+        /// <param name="git">Git state of the run, used by the git tag source.</param>
+        /// <param name="log">Optional log for the fallback warnings.</param>
+        public static string Resolve(VersioningConfig versioning, GitInfo git, IBuildLog log)
         {
             var fallback = string.IsNullOrWhiteSpace(PlayerSettings.bundleVersion)
                 ? "0.1.0"
                 : PlayerSettings.bundleVersion;
 
-            if (profile == null)
+            if (versioning == null || !versioning.manageVersion)
                 return fallback;
 
-            switch (profile.VersionSource)
+            if (versioning.ReadsVersionFile)
+            {
+                var path = ProjectPaths.MakeAbsolute(versioning.versionFilePath);
+                if (!File.Exists(path))
+                {
+                    log?.Warning($"Version file '{path}' not found, falling back to PlayerSettings ({fallback}).");
+                    return fallback;
+                }
+
+                var line = File.ReadLines(path).FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+                return string.IsNullOrWhiteSpace(line) ? fallback : line.Trim();
+            }
+
+            switch (versioning.source)
             {
                 case VersionSource.Profile:
-                    return string.IsNullOrWhiteSpace(profile.Version) ? fallback : profile.Version.Trim();
-
-                case VersionSource.VersionFile:
-                {
-                    var path = ProjectPaths.MakeAbsolute(profile.VersionFilePath);
-                    if (!File.Exists(path))
-                    {
-                        log?.Warning($"Version file '{path}' not found, falling back to PlayerSettings ({fallback}).");
-                        return fallback;
-                    }
-
-                    var line = File.ReadLines(path).FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
-                    return string.IsNullOrWhiteSpace(line) ? fallback : line.Trim();
-                }
+                    return string.IsNullOrWhiteSpace(versioning.version) ? fallback : versioning.version.Trim();
 
                 case VersionSource.GitTag:
                 {
@@ -74,16 +82,22 @@ namespace BuildManagerKit.Editor
             }
         }
 
-        /// <summary>Works out the numeric build counter for a run.</summary>
-        public static int ResolveBuildNumber(BuildTargetProfile profile, GitInfo git)
+        /// <summary>
+        /// Works out the numeric build counter for a run. Returns the project's current
+        /// <c>versionCode</c> when the block does not manage the build number, so applying it is a
+        /// no-op.
+        /// </summary>
+        /// <param name="versioning">The versioning block in effect, may be null.</param>
+        /// <param name="git">Git state of the run, used by the commit count policy.</param>
+        public static int ResolveBuildNumber(VersioningConfig versioning, GitInfo git)
         {
-            if (profile == null)
+            if (versioning == null || !versioning.manageBuildNumber)
                 return PlayerSettings.Android.bundleVersionCode;
 
-            switch (profile.BuildNumberPolicy)
+            switch (versioning.buildNumberPolicy)
             {
                 case BuildNumberPolicy.GitCommitCount:
-                    return git != null && git.CommitCount > 0 ? git.CommitCount : profile.BuildNumber;
+                    return git != null && git.CommitCount > 0 ? git.CommitCount : versioning.buildNumber;
 
                 case BuildNumberPolicy.Timestamp:
                     // Minutes since 2020-01-01 UTC: monotonic, fits comfortably in an int and
@@ -94,42 +108,73 @@ namespace BuildManagerKit.Editor
                 case BuildNumberPolicy.Manual:
                 case BuildNumberPolicy.AutoIncrementOnSuccess:
                 default:
-                    return Math.Max(1, profile.BuildNumber);
+                    return Math.Max(1, versioning.buildNumber);
             }
         }
 
         /// <summary>Writes the resolved version and build number into the player settings.</summary>
         public static void Apply(BuildContext context)
         {
-            if (context.DryRun)
+            var versioning = context.Versioning;
+            var manageVersion = versioning.manageVersion;
+            var manageBuildNumber = versioning.manageBuildNumber;
+
+            if (!manageVersion && !manageBuildNumber)
             {
-                context.Log.Info(
-                    $"[dry run] Would set version {context.Version} and build number {context.BuildNumber}.");
+                context.Log.Info("Versioning is not managed by Build Manager Kit; player settings left as they are.");
                 return;
             }
 
-            PlayerSettings.bundleVersion = context.Version;
-            PlayerSettings.Android.bundleVersionCode = context.BuildNumber;
-            PlayerSettings.iOS.buildNumber = context.BuildNumber.ToString(CultureInfo.InvariantCulture);
-            PlayerSettings.macOS.buildNumber = context.BuildNumber.ToString(CultureInfo.InvariantCulture);
+            if (context.DryRun)
+            {
+                context.Log.Info("[dry run] Would set "
+                                 + (manageVersion ? $"version {context.Version}" : "no version")
+                                 + (manageBuildNumber ? $" and build number {context.BuildNumber}." : "."));
+                return;
+            }
 
-            context.Log.Info($"Version {context.Version} (build {context.BuildNumber}).");
+            if (manageVersion)
+                PlayerSettings.bundleVersion = context.Version;
+
+            if (manageBuildNumber)
+            {
+                PlayerSettings.Android.bundleVersionCode = context.BuildNumber;
+                PlayerSettings.iOS.buildNumber = context.BuildNumber.ToString(CultureInfo.InvariantCulture);
+                PlayerSettings.macOS.buildNumber = context.BuildNumber.ToString(CultureInfo.InvariantCulture);
+            }
+
+            context.Log.Info(
+                (manageVersion ? $"Version {context.Version}" : $"Version {context.Version} (not managed)")
+                + (manageBuildNumber ? $" (build {context.BuildNumber})." : " (build number not managed).")
+                + $" Source: {context.VersioningOwnerLabel}.");
         }
 
         /// <summary>
-        /// Bumps the stored counter of a profile after a successful build, when its policy asks
-        /// for it. Returns the new value, or the unchanged one.
+        /// Bumps the stored counter after a successful build, when the winning block asks for it.
+        /// The counter is written back to whichever asset supplied the block — the settings asset
+        /// holding the common configuration, an environment, or a profile.
+        ///
+        /// A run whose number was supplied explicitly (<c>-bmkBuildNumber</c>) leaves the counter
+        /// alone: that number did not come from the counter, so advancing it would make the stored
+        /// value drift away from what was actually shipped.
         /// </summary>
-        public static int CommitBuildNumber(BuildTargetProfile profile)
+        /// <param name="context">The finished run.</param>
+        /// <returns>The new counter value, or the unchanged one.</returns>
+        public static int CommitBuildNumber(BuildContext context)
         {
-            if (profile == null || profile.BuildNumberPolicy != BuildNumberPolicy.AutoIncrementOnSuccess)
-                return profile != null ? profile.BuildNumber : 0;
+            if (context == null)
+                return 0;
 
-            profile.BuildNumber += 1;
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssetIfDirty(profile);
+            var resolved = context.ResolvedVersioning;
+            var versioning = resolved.Config;
 
-            return profile.BuildNumber;
+            if (!resolved.IsOwned || !versioning.IncrementsBuildNumber || context.BuildNumberWasSupplied)
+                return versioning.buildNumber;
+
+            versioning.buildNumber += 1;
+            resolved.SaveOwner();
+
+            return versioning.buildNumber;
         }
 
         /// <summary>
@@ -178,13 +223,16 @@ namespace BuildManagerKit.Editor
         public static bool IsValid(string version) =>
             !string.IsNullOrWhiteSpace(version) && k_SemVer.IsMatch(version.Trim());
 
-        /// <summary>Writes a version string back to the profile's version file.</summary>
-        public static void WriteVersionFile(BuildTargetProfile profile, string version)
+        /// <summary>
+        /// Writes a version string back to the version file of <paramref name="versioning"/>. Does
+        /// nothing when that block does not use a version file.
+        /// </summary>
+        public static void WriteVersionFile(VersioningConfig versioning, string version)
         {
-            if (profile == null || profile.VersionSource != VersionSource.VersionFile)
+            if (versioning == null || !versioning.ReadsVersionFile)
                 return;
 
-            var path = ProjectPaths.MakeAbsolute(profile.VersionFilePath);
+            var path = ProjectPaths.MakeAbsolute(versioning.versionFilePath);
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);

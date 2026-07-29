@@ -337,14 +337,17 @@ namespace BuildManagerKit.Editor
 
             context.ApplyEnvironmentVariables(context.Environment);
 
+            context.ResolvedVersioning = ConfigResolver.ResolveVersioning(settings, context.Environment, profile);
+
             context.Version = string.IsNullOrWhiteSpace(request.VersionOverride)
-                ? VersionService.Resolve(profile, context.Git, log)
+                ? VersionService.Resolve(context.Versioning, context.Git, log)
                 : request.VersionOverride.Trim();
 
+            context.BuildNumberWasSupplied = request.BuildNumberOverride.HasValue;
             context.BuildNumber = request.BuildNumberOverride
-                                  ?? VersionService.ResolveBuildNumber(profile, context.Git);
+                                  ?? VersionService.ResolveBuildNumber(context.Versioning, context.Git);
 
-            context.DevelopmentBuild = ResolveDevelopmentBuild(profile, context.Environment, overrides);
+            context.DevelopmentBuild = ResolveDevelopmentBuild(profile, context.Environment, overrides, settings);
 
             context.Scenes = overrides.Scenes != null && overrides.Scenes.Length > 0
                 ? overrides.Scenes
@@ -396,7 +399,7 @@ namespace BuildManagerKit.Editor
         }
 
         private static bool ResolveDevelopmentBuild(BuildTargetProfile profile, BuildEnvironment environment,
-            BuildOverrides overrides = null)
+            BuildOverrides overrides = null, BuildManagerSettings settings = null)
         {
             // An explicit command line flag is the most specific instruction available and beats
             // both the environment's force setting and the profile's own value.
@@ -406,7 +409,10 @@ namespace BuildManagerKit.Editor
             if (environment == null)
                 return profile.DevelopmentBuild;
 
-            switch (environment.ForceDevelopmentBuild)
+            // Inherit: the environment says nothing, so the base environment gets a say before the
+            // profile's own flag decides.
+            switch (ConfigResolver.ResolveForceDevelopmentBuild(settings ?? BuildManagerSettings.InstanceOrNull,
+                        environment))
             {
                 case OptionalBool.Enabled: return true;
                 case OptionalBool.Disabled: return false;
@@ -767,7 +773,7 @@ namespace BuildManagerKit.Editor
                 context.Status = BuildRunStatus.Failed;
 
             if (context.Status == BuildRunStatus.Succeeded && !context.DryRun)
-                VersionService.CommitBuildNumber(context.Profile);
+                VersionService.CommitBuildNumber(context);
 
             if (restoreSettings && snapshot != null)
             {
@@ -898,9 +904,10 @@ namespace BuildManagerKit.Editor
             };
 
             context.ApplyEnvironmentVariables(environment);
-            context.Version = VersionService.Resolve(profile, context.Git, null);
-            context.BuildNumber = VersionService.ResolveBuildNumber(profile, context.Git);
-            context.DevelopmentBuild = ResolveDevelopmentBuild(profile, environment);
+            context.ResolvedVersioning = ConfigResolver.ResolveVersioning(settings, environment, profile);
+            context.Version = VersionService.Resolve(context.Versioning, context.Git, null);
+            context.BuildNumber = VersionService.ResolveBuildNumber(context.Versioning, context.Git);
+            context.DevelopmentBuild = ResolveDevelopmentBuild(profile, environment, null, settings);
             context.Scenes = profile.ResolveScenePaths();
             context.RefreshTokens();
 

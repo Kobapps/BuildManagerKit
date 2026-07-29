@@ -19,9 +19,9 @@ MonoBehaviour:
   m_BuildNumber: 1
   m_BuildTarget: Android
   m_IsDevelopmentBuild: 0
-  m_GitBranch: 
-  m_GitCommit: 
+  m_GitBranch: main
+  m_GitCommit: aed9471
   m_GitDirty: 0
-  m_BuildTimeUtc: 
-  m_BuildMachine: 
+  m_BuildTimeUtc: 2026-07-29T15:33:14.6430440Z
+  m_BuildMachine: Kobi-chariskiMacBook-Pro
   m_Variables: []

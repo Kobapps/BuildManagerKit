@@ -66,6 +66,27 @@ namespace BuildManagerKit.Editor
         /// <summary>Numeric build counter applied to the player. Pre build steps may change it.</summary>
         public int BuildNumber { get; set; }
 
+        /// <summary>
+        /// The versioning block this run uses, resolved from the profile, the environment or the
+        /// common configuration. Steps read it to know whether the version is managed at all and
+        /// whether it is backed by a text file.
+        /// </summary>
+        public VersioningConfig Versioning => ResolvedVersioning.Config;
+
+        /// <summary>Where the versioning block came from, e.g. <c>profile 'android'</c>.</summary>
+        public string VersioningOwnerLabel => ResolvedVersioning.OwnerLabel;
+
+        /// <summary>
+        /// True when the build number came from an explicit request override rather than from the
+        /// versioning block. The stored counter did not produce this run's number, so it is not
+        /// advanced afterwards.
+        /// </summary>
+        internal bool BuildNumberWasSupplied { get; set; }
+
+        /// <summary>The winning versioning block together with the asset that owns its counter.</summary>
+        internal ResolvedVersioning ResolvedVersioning { get; set; } =
+            new ResolvedVersioning(VersioningConfig.Unmanaged, null, "nothing");
+
         /// <summary>Absolute folder the player is written to.</summary>
         public string OutputDirectory { get; internal set; } = string.Empty;
 
@@ -241,13 +262,17 @@ namespace BuildManagerKit.Editor
                 m_Tokens[pair.Key] = pair.Value;
         }
 
-        /// <summary>Copies the environment variables into the context.</summary>
+        /// <summary>
+        /// Copies the environment variables into the context — the base environment's first, then
+        /// the environment's own on top, so a shared variable is declared once in the common
+        /// configuration.
+        /// </summary>
         internal void ApplyEnvironmentVariables(BuildEnvironment environment)
         {
             if (environment == null)
                 return;
 
-            foreach (var variable in environment.Variables)
+            foreach (var variable in ConfigResolver.ResolveVariables(Settings, environment))
             {
                 if (!string.IsNullOrEmpty(variable.key))
                     m_Variables[variable.key] = variable.value ?? string.Empty;
