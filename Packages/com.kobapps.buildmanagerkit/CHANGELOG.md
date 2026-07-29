@@ -4,6 +4,34 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-07-29
+
+### Added
+
+- **Configuration command line** — `ConfigCLI.Describe`, `CreateEnvironment`, `SetEnvironment`,
+  `DeleteEnvironment`, `SetConfigAsset`, `RemoveConfigAsset` and `Help`. `Describe` emits the whole
+  project — environments, profiles, queues, published config keys and the health check — as JSON,
+  and the mutating verbs write through Unity's serialisation, change only the arguments passed, and
+  run the health check when they finish. This gives provisioning scripts a validated alternative to
+  editing the `.asset` YAML, where a text edit silently drops `[SerializeReference]` action lists
+  and GUID asset references.
+- **Environment id validation** — an id has to survive being both an `ENV_<ID>` preprocessor symbol
+  and part of a filename, so `CreateEnvironment` rejects anything that is not a plain identifier
+  and names the sanitised form it would otherwise have used.
+- **`-bmkIcon`** — sets or clears an environment's application icon override from the command line,
+  which previously had no headless route at all. `Describe` reports it as an asset path.
+- **AI assistant skill** — ships in `Skills~/buildmanagerkit`, installable to `.claude/skills` at
+  project or user level from *Tools ▸ Build Manager Kit ▸ AI Assistant Skill…* or the Settings tab.
+  It teaches a coding agent to drive the command line rather than hand-edit assets, and documents
+  the environment rules that are easy to get wrong. Installing replaces the folder wholesale;
+  removing it first verifies the folder really is this skill.
+
+### Changed
+
+- **Application icon override** — moved out of the generic property list into its own card with a
+  live preview of the texture, its dimensions and format. The fields only appear once the override
+  is switched on.
+
 ## [1.0.0] — 2026-07-29
 
 ### Added
@@ -71,17 +99,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   list and the platform-switch policy. Omitted flags keep the profile's value, so CI never has to
   edit profile assets; unparsable values exit `2` listing what was accepted; and the overrides in
   effect are echoed into the build log.
-- **Configuration command line** — `ConfigCLI.Describe`, `CreateEnvironment`, `SetEnvironment`,
-  `DeleteEnvironment`, `SetConfigAsset`, `RemoveConfigAsset` and `Help`. `Describe` emits the whole
-  project — environments, profiles, queues, published config keys and the health check — as JSON,
-  and the mutating verbs write through Unity's serialisation and run the health check afterwards.
-  This gives provisioning scripts a validated alternative to editing the `.asset` YAML, where a
-  text edit silently drops `[SerializeReference]` action lists and GUID asset references.
-- **AI assistant skill** — ships in `Skills~/buildmanagerkit`, installable to `.claude/skills` at
-  project or user level from *Tools ▸ Build Manager Kit ▸ AI Assistant Skill…* or the Settings tab.
-  It teaches a coding agent to drive the command line rather than hand-edit assets, and documents
-  the environment rules that are easy to get wrong. Installing replaces the folder wholesale;
-  removing it first verifies the folder really is this skill.
 - **CI templates** — generated GitHub Actions, GitLab CI, Jenkins and shell pipelines wired to the
   project's own profiles.
 - **Validation** — configuration checks for missing modules, empty scene lists, absent scenes,
