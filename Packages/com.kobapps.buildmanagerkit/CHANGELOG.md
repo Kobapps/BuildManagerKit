@@ -4,6 +4,88 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-07-30
+
+### Added
+
+- **Common configuration** — the settings that are the same in every environment (product and company
+  name, bundle identifier, application icon, force development build, shared runtime variables and
+  versioning) now live in one block on the settings asset. It appears as a **Common configuration**
+  item pinned above the environment list in the Environments tab, in its own section because it is not
+  an environment, and selecting it edits it exactly like one. Every environment starts from those
+  values and overrides only what differs, so a company rename is one edit instead of one per flavour.
+  Precedence follows the rest of the kit — profile over environment over common. `ConfigResolver`
+  exposes the same resolution to code and `ConfigCLI.SetCommon` edits it headlessly.
+- **Optional versioning** — version management and build number management are independent switches,
+  and the version text file is a toggle of its own rather than one of the sources. With a switch off
+  the kit leaves those player settings exactly as the project has them, which is what a project that
+  stamps versions from a release script actually wants. The fields of a disabled switch are hidden
+  rather than greyed out, in the window and in the Inspector alike, through a shared
+  `VersioningConfig` drawer.
+- **Versioning is shared, with per-level overrides** — the block lives in the common configuration,
+  and an *Override versioning* switch on an environment or a profile covers the cases that differ
+  (staging shipping `1.4.0-rc`, one platform on its own counter). The auto-increment counter is stored
+  on whichever asset owns the block, and the Dashboard, the build log and `Describe` all name that
+  asset. A build number supplied with `-bmkBuildNumber` is used as-is and no longer advances the stored
+  counter, which used to make it drift away from what was shipped.
+- **Delete a profile or an environment from the window** — a Delete button in the detail header and a
+  right-click menu on every catalogue row. Deleting cleans up after itself: a profile is removed from
+  the settings and from the queue entries that built it, and an environment additionally from the
+  profiles that allowed or defaulted to it, the queue defaults and the active slot — handing the Editor
+  to another environment when the deleted one was active. Deleting the last remaining environment while
+  it is active is refused rather than leaving the Editor with defines from an asset that no longer
+  exists. `ConfigCLI.DeleteEnvironment` performs the same cleanup.
+- **`ConfigCLI.SetCommon`** plus versioning arguments on `SetEnvironment`:
+  `-bmkOverrideVersioning`, `-bmkManageVersion`, `-bmkVersionSource`, `-bmkVersion`,
+  `-bmkVersionFile`, `-bmkNoVersionFile`, `-bmkManageBuildNumber`, `-bmkBuildNumberPolicy` and
+  `-bmkBuildNumber`. `Describe` reports the common configuration and the versioning each environment
+  and profile resolves to, with the asset it came from.
+- **Health checks for the common configuration** — duplicate shared variable keys, a variable with no
+  key, and a version file that does not exist. Each of those would otherwise show up in every flavour
+  at once.
+
+### Fixed
+
+- **The main toolbar environment pill never appeared on Unity 6.4.** It was compiled behind
+  `UNITY_6000_5_OR_NEWER`, but the main-toolbar extension API it uses is already present in 6000.4 — so
+  a project on 6.4 installed the package and simply got no toolbar element, with nothing to explain
+  why. The gate is now `UNITY_6000_4_OR_NEWER`, verified by compiling the element against both the
+  6000.4 and 6000.5 editor assemblies.
+
+### Changed
+
+- **The header profile selector is gone; Build is a split button.** The wide half builds the selected
+  profile and says which one it is; the ▼ half lists every profile with its platform icon, plus Dry
+  Run and Validate. Building a specific target is one click, and the choice becomes the new selection,
+  so the header keeps answering "what does Build do". The menu stays available when no profile exists
+  yet, because that is where the starter profiles are created. The header previously carried two
+  similar looking pills — the Editor platform and the build profile — that read as two copies of one
+  control.
+- **The override checkboxes are gone.** Product name, company name, bundle identifier and the
+  application icon are plain fields now: a value overrides the shared one, and clearing the field goes
+  back to it. An environment's empty field shows the shared value greyed out as its placeholder and
+  says underneath where the value in effect comes from, so nothing has to be inferred from a checkbox
+  and a field that looks unset. In the common configuration an empty field means the kit does not
+  manage that setting at all. `-bmkProductName ""` on an environment therefore hands the field back to
+  the common value rather than clearing an override switch.
+
+### Migration
+
+- Profiles authored before this release carried their own versioning. They are migrated when they load
+  — with the override switched on and the counter intact — so the next build stamps exactly what it did
+  before. Profiles created afterwards share the common versioning. To move a profile onto the shared
+  block, switch *Version this profile differently* off.
+- Environments authored before this release had an override checkbox beside each player setting. They
+  are migrated when they load: a field whose box was unchecked is cleared, because a value left behind
+  by an unchecked box would otherwise start overriding the shared one the moment the boxes disappeared.
+  The one case that cannot survive is "override with an empty value", which used to mean "no product
+  name at all" and now means "take the common one".
+- `VersionService.Resolve`, `ResolveBuildNumber`, `WriteVersionFile` and `CommitBuildNumber` now take
+  the resolved `VersioningConfig` (or the `BuildContext`) rather than a `BuildTargetProfile`, and
+  `EnvironmentManager.ApplyPlayerSettingOverrides` has an overload taking the settings asset. Code
+  calling the old signatures needs the one-line change; the profile's `VersionSource`, `Version`,
+  `VersionFilePath`, `BuildNumberPolicy` and `BuildNumber` properties still read as before.
+
 ## [1.1.0] — 2026-07-29
 
 ### Added
@@ -119,4 +201,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   with a live build console.
 - **Project Settings page** and custom inspectors for every asset type.
 
+[1.2.0]: https://github.com/Kobapps/BuildManagerKit/releases/tag/v1.2.0
+[1.1.0]: https://github.com/Kobapps/BuildManagerKit/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Kobapps/BuildManagerKit/releases/tag/v1.0.0
