@@ -613,3 +613,48 @@
     font-size: 11px;
     white-space: normal;
 }
+
+/* ---- Application icon override ------------------------------------------------ */
+
+.bmk-icon-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-top: 8px;
+}
+
+/* Checkerboard is not available in USS, so a flat well plus a border is what reads
+   best behind an icon that may itself have transparency. */
+.bmk-icon-frame {
+    width: 76px;
+    height: 76px;
+    border-radius: var(--bmk-radius);
+    border-width: 1px;
+    border-color: var(--bmk-border);
+    background-color: var(--bmk-surface-strong);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.bmk-icon-frame--empty {
+    border-color: var(--bmk-border);
+}
+
+.bmk-icon-image {
+    width: 64px;
+    height: 64px;
+}
+
+.bmk-icon-empty-label {
+    font-size: 10px;
+    color: var(--bmk-muted);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.bmk-icon-fields {
+    flex-grow: 1;
+    margin-left: 10px;
+    min-width: 0;
+}

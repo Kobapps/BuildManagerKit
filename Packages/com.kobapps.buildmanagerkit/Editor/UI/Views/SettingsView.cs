@@ -78,11 +78,50 @@ namespace BuildManagerKit.Editor
                 "Run last, after the profile and environment actions."));
             root.Add(postCard);
 
+            root.Add(BuildAgentSkillCard());
             root.Add(BuildExtensionCard());
             root.Add(BuildRuntimeCard());
 
             root.Bind(serializedObject);
             return root;
+        }
+
+        private VisualElement BuildAgentSkillCard()
+        {
+            var card = BuildManagerUI.Card(
+                "AI assistant skill",
+                "Ships with the package. Teaches a coding agent to manage this project's environments, "
+                + "config assets and builds through the validated command line instead of editing the "
+                + ".asset files as text — which silently drops action lists and asset references.");
+
+            var project = AgentSkill.GetState(AgentSkillScope.Project);
+            var user = AgentSkill.GetState(AgentSkillScope.User);
+
+            card.Add(BuildManagerUI.KeyValue("This project", Describe(project)));
+            card.Add(BuildManagerUI.KeyValue("This machine", Describe(user)));
+
+            var row = new VisualElement();
+            row.AddToClassList("bmk-row");
+            row.style.marginTop = 6;
+
+            var needsAttention = project != AgentSkillState.UpToDate && user != AgentSkillState.UpToDate;
+            row.Add(needsAttention
+                ? BuildManagerUI.PrimaryButton("Install Skill…", AgentSkillWindow.Open)
+                : new Button(AgentSkillWindow.Open) { text = "Manage Skill…" });
+
+            card.Add(row);
+            return card;
+        }
+
+        private static string Describe(AgentSkillState state)
+        {
+            switch (state)
+            {
+                case AgentSkillState.UpToDate: return "installed";
+                case AgentSkillState.Outdated: return "installed — update available";
+                case AgentSkillState.SourceMissing: return "the package copy is missing";
+                default: return "not installed";
+            }
         }
 
         private VisualElement BuildExtensionCard()

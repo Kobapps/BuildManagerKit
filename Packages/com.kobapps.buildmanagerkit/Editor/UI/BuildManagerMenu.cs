@@ -97,6 +97,9 @@ namespace BuildManagerKit.Editor
             BuildManagerWindow.Open();
         }
 
+        [MenuItem(k_Root + "AI Assistant Skill…", priority = 23)]
+        private static void AgentSkillSettings() => AgentSkillWindow.Open();
+
         [MenuItem(k_Root + "Select Settings Asset", priority = 22)]
         private static void SelectSettings()
         {

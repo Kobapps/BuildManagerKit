@@ -61,7 +61,8 @@ only, so the package adds nothing to a player that does not use them.
 | **Profiles** | Target, scenes, output path, scripting backend, IL2CPP configuration, stripping, compression, signing and the full `BuildOptions` set — as VCS-friendly assets. |
 | **Environments** | Defines, product name, bundle identifier, app icon, runtime variables and per-environment config assets. Switchable in the Editor from the main toolbar, so play mode matches the shipped build. |
 | **Actions** | Ordered pre/post build steps at global, environment and profile scope, with key-based overrides. Extend by deriving from `BuildStep` or marking a method `[BuildHook]`. |
-| **CI/CD** | Every build option reachable from the command line, JSON reports, meaningful exit codes, and generated GitHub Actions / GitLab CI / Jenkins pipelines. |
+| **CI/CD** | Every build option reachable from the command line, JSON reports, meaningful exit codes, and generated GitHub Actions / GitLab CI / Jenkins pipelines. A second `ConfigCLI` reads and edits the configuration itself, so provisioning never touches the `.asset` YAML. |
+| **AI assistant** | A skill for coding agents ships with the package and installs into `.claude/skills` in one click, teaching an agent to manage environments through the validated CLI. |
 | **Safety** | Refuses to build into `Assets`, `Library` or the project root; a project health check catches duplicate ids, colliding output paths and clashing defines before they reach a build. |
 
 ## Development

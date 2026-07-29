@@ -16,6 +16,8 @@ namespace BuildManagerKit.Editor
         private static readonly HashSet<string> k_HiddenFields = new HashSet<string>
         {
             "m_Script",
+            "m_OverrideApplicationIcon",
+            "m_ApplicationIcon",
             "m_OnActivateSteps",
             "m_PreBuildSteps",
             "m_PostBuildSteps"
@@ -236,6 +238,7 @@ namespace BuildManagerKit.Editor
                 k_HiddenFields);
             detail.Add(configuration);
 
+            detail.Add(BuildApplicationIconCard(serializedObject));
             detail.Add(BuildPublishedAssetsCard());
             detail.Add(BuildGlobalActionsBanner());
 
@@ -271,6 +274,88 @@ namespace BuildManagerKit.Editor
         /// its own entries layered on top. Shows which key comes from where, because "why is
         /// Get&lt;T&gt; returning the wrong asset" is otherwise a guessing game.
         /// </summary>
+        /// <summary>
+        /// The application icon override, with a live preview.
+        ///
+        /// Drawn by hand rather than left to the generic property loop for two reasons: an icon is
+        /// the one setting you want to *see* rather than read a path for, and the texture field is
+        /// meaningless until the override is switched on — so it only appears then.
+        /// </summary>
+        private VisualElement BuildApplicationIconCard(SerializedObject serializedObject)
+        {
+            var enabledProperty = serializedObject.FindProperty("m_OverrideApplicationIcon");
+            var iconProperty = serializedObject.FindProperty("m_ApplicationIcon");
+
+            var card = BuildManagerUI.Card(
+                "Application icon",
+                "A badged or tinted icon per environment stops a tester filing a bug against the wrong "
+                + "build. Applied when this environment is activated and when it is built, then restored "
+                + "with the rest of the player settings — so it never leaks into a production player.");
+
+            var toggle = new PropertyField(enabledProperty, "Override application icon");
+            toggle.Bind(serializedObject);
+            card.Add(toggle);
+
+            var body = new VisualElement();
+            body.AddToClassList("bmk-icon-row");
+            card.Add(body);
+
+            var frame = new VisualElement();
+            frame.AddToClassList("bmk-icon-frame");
+            body.Add(frame);
+
+            var preview = new Image { scaleMode = ScaleMode.ScaleToFit };
+            preview.AddToClassList("bmk-icon-image");
+            frame.Add(preview);
+
+            var emptyLabel = new Label("no icon");
+            emptyLabel.AddToClassList("bmk-icon-empty-label");
+            frame.Add(emptyLabel);
+
+            var fields = new VisualElement();
+            fields.AddToClassList("bmk-icon-fields");
+            body.Add(fields);
+
+            var iconField = new PropertyField(iconProperty, "Icon texture");
+            iconField.Bind(serializedObject);
+            fields.Add(iconField);
+
+            var detailLabel = BuildManagerUI.Muted(string.Empty);
+            fields.Add(detailLabel);
+
+            void Refresh()
+            {
+                // The SerializedObject is shared with the fields above, so re-read it rather than
+                // trusting a cached value: the toggle may have been flipped a frame ago.
+                serializedObject.Update();
+
+                var enabled = enabledProperty.boolValue;
+                var texture = iconProperty.objectReferenceValue as Texture2D;
+
+                body.style.display = enabled ? DisplayStyle.Flex : DisplayStyle.None;
+
+                if (!enabled)
+                    return;
+
+                preview.image = texture;
+                preview.style.display = texture != null ? DisplayStyle.Flex : DisplayStyle.None;
+                emptyLabel.style.display = texture != null ? DisplayStyle.None : DisplayStyle.Flex;
+                frame.EnableInClassList("bmk-icon-frame--empty", texture == null);
+
+                detailLabel.text = texture != null
+                    ? $"{texture.width} × {texture.height} · {texture.format}"
+                    : "Assign a texture, or the override does nothing.";
+            }
+
+            // Track both properties so the card also follows undo, a CLI edit picked up by a
+            // reimport, and someone editing the asset in the Inspector alongside this window.
+            card.TrackPropertyValue(enabledProperty, _ => Refresh());
+            card.TrackPropertyValue(iconProperty, _ => Refresh());
+            card.schedule.Execute(Refresh);
+
+            return card;
+        }
+
         private VisualElement BuildPublishedAssetsCard()
         {
             var resolved = EnvironmentAssetsWriter.Resolve(m_Selected, Settings);

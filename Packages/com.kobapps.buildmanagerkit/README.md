@@ -452,6 +452,49 @@ Exit codes: `0` success · `1` build failed · `2` usage error · `3` cancelled.
 The **CI / CD** tab generates ready to run definitions for GitHub Actions, GitLab CI, Jenkins and a
 plain shell script, already wired to your profiles. Samples of each are also under `Samples~`.
 
+### Editing the configuration from the command line
+
+`ConfigCLI` is the other half: it reads and edits the configuration rather than building with it,
+so a provisioning script never has to touch the `.asset` files as text — where a wrong edit
+silently drops `[SerializeReference]` action lists and GUID asset references.
+
+```bash
+# Read everything as JSON: environments, profiles, queues, config keys, health check.
+-executeMethod BuildManagerKit.Editor.ConfigCLI.Describe -bmkResultFile bmk-state.json
+
+-executeMethod BuildManagerKit.Editor.ConfigCLI.CreateEnvironment \
+    -bmkEnv qa -bmkDisplayName "QA" -bmkColor "#E0A030" -bmkDefines "QA_BUILD" \
+    -bmkAppIdentifier com.studio.game.qa -bmkVars "api_url=https://qa.api.example.com"
+
+-executeMethod BuildManagerKit.Editor.ConfigCLI.SetConfigAsset \
+    -bmkEnv qa -bmkKey gameConfig -bmkAsset Assets/Config/GameConfig_QA.asset
+```
+
+`SetEnvironment` changes only the arguments you pass, variables merge by key, and every mutating
+verb runs the project health check when it finishes — so a change that leaves the project
+unhealthy is reported immediately rather than at the next build. `ConfigCLI.Help` prints the full
+reference.
+
+## AI assistant skill
+
+The package ships a skill for coding agents under `Skills~/buildmanagerkit`. Install it from
+*Tools ▸ Build Manager Kit ▸ AI Assistant Skill…*, or from the **Install Skill…** button on the
+Settings tab, to either:
+
+| target | path | who gets it |
+| --- | --- | --- |
+| This project | `<project>/.claude/skills/buildmanagerkit` | anyone who checks out the repo, including CI |
+| This machine | `~/.claude/skills/buildmanagerkit` | every project you open locally |
+
+It teaches an agent to drive `ConfigCLI` and `BuildCLI` instead of editing assets as text, and
+documents the rules that are easy to get wrong — ids that must stay legal identifiers,
+`-bmkDefines` replacing rather than appending, config keys that have to be published by every
+environment, and never writing a build into `Assets/`.
+
+It is plain markdown, nothing executable, and nothing is written inside `Assets/`. The popup lists
+the exact files before installing. Removing checks the folder really is this skill first, so a
+skill of your own that happens to share the name is never deleted.
+
 ## Build queues
 
 A queue builds several profiles in order. Switching platforms between entries reloads the script

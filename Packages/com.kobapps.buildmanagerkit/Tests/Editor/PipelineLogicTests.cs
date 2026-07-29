@@ -94,6 +94,49 @@ namespace BuildManagerKit.Tests
         }
 
         [Test]
+        public void Compose_KeepsADefineSharedByTwoEnvironments()
+        {
+            // The shipped agent skill documents sharing a define across environments as supported —
+            // it is how "non production" is expressed. Strip-all-then-add-current is what makes it
+            // work, so pin it: reordering those two steps would silently break the pattern.
+            var qa = CreateEnvironment("qa", new[] { "NON_PROD" });
+            var staging = CreateEnvironment("staging", new[] { "NON_PROD" });
+
+            try
+            {
+                var result = ScriptingDefineUtility.Compose(
+                    new[] { "NON_PROD", "ENV_STAGING" }, qa, new[] { m_Dev, m_Prod, qa, staging });
+
+                CollectionAssert.Contains(result, "NON_PROD",
+                    "A define the incoming environment also declares must survive the strip.");
+                CollectionAssert.DoesNotContain(result, "ENV_STAGING");
+            }
+            finally
+            {
+                Object.DestroyImmediate(qa);
+                Object.DestroyImmediate(staging);
+            }
+        }
+
+        [Test]
+        public void Compose_DropsASharedDefineWhenTheIncomingEnvironmentDoesNotDeclareIt()
+        {
+            var shared = CreateEnvironment("shared", new[] { "NON_PROD" });
+
+            try
+            {
+                var result = ScriptingDefineUtility.Compose(
+                    new[] { "NON_PROD" }, m_Prod, new[] { m_Dev, m_Prod, shared });
+
+                CollectionAssert.DoesNotContain(result, "NON_PROD");
+            }
+            finally
+            {
+                Object.DestroyImmediate(shared);
+            }
+        }
+
+        [Test]
         public void Compose_IsIdempotent()
         {
             var once = Compose(new[] { "UNRELATED" }, m_Prod);
