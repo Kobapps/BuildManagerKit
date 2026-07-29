@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab260768e227c4345be9a27f5188ebdc, type: 3}
+  m_Name: BuildInfo
+  m_EditorClassIdentifier: BuildManagerKit.Runtime::BuildManagerKit.BuildInfo
+  m_EnvironmentId: dev
+  m_EnvironmentName: Dev
+  m_ProfileId: 
+  m_Version: 0.1.0
+  m_BuildNumber: 1
+  m_BuildTarget: Android
+  m_IsDevelopmentBuild: 0
+  m_GitBranch: 
+  m_GitCommit: 
+  m_GitDirty: 0
+  m_BuildTimeUtc: 
+  m_BuildMachine: 
+  m_Variables: []

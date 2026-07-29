@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 493224d7ed3cb44a6aaefeaa7c8f75c6, type: 3}
+  m_Name: BuildManagerSettings
+  m_EditorClassIdentifier: BuildManagerKit.Editor::BuildManagerKit.Editor.BuildManagerSettings
+  m_Profiles:
+  - {fileID: 11400000, guid: 94988b98badcb4d3586f62715049dff5, type: 2}
+  - {fileID: 11400000, guid: b2ddacc6f744041769a7ffec032418e7, type: 2}
+  - {fileID: 11400000, guid: 8567f5f9f0ab645d1942f19195156d2c, type: 2}
+  m_Environments:
+  - {fileID: 11400000, guid: 03a248521f8a94ccfb5dce609cffe4b8, type: 2}
+  - {fileID: 11400000, guid: 52ddc536998b0410eae171f8d3b64bdf, type: 2}
+  - {fileID: 11400000, guid: cfca95226c947407383c443a26a0e831, type: 2}
+  - {fileID: 11400000, guid: 0ba2b36b15b4443ec92c2a3b834f5cd3, type: 2}
+  m_Queues: []
+  m_ActiveEnvironment: {fileID: 11400000, guid: 03a248521f8a94ccfb5dce609cffe4b8, type: 2}
+  m_DefaultConfigAssets: []
+  m_GlobalOnActivateSteps: []
+  m_GlobalPreBuildSteps:
+  - rid: 6714699482356777201
+  m_GlobalPostBuildSteps: []
+  m_RestoreSettingsAfterBuild: 1
+  m_WriteBuildInfoAsset: 1
+  m_WriteEnvironmentAssets: 1
+  m_WriteBuildManifest: 1
+  m_WriteLogFiles: 1
+  m_LogFolder: Logs/BuildManagerKit
+  m_HistoryLimit: 100
+  m_FailOnEmptySceneList: 1
+  m_ConfirmBeforeBuilding: 0
+  m_RevealOutputOnSuccess: 1
+  references:
+    version: 2
+    RefIds:
+    - rid: 6714699482356777201
+      type: {class: RunShellCommandStep, ns: BuildManagerKit.Editor, asm: BuildManagerKit.Editor}
+      data:
+        m_Guid: d1da494263b644fea255f7362aa6a55a
+        m_Enabled: 1
+        m_Label: 
+        m_OnError: 0
+        m_RunWhen: 0
+        m_EnvironmentFilter: 
+        m_Key: 
+        m_Command: echo Built {productName} {version} to {outputPath}
+        m_WorkingDirectory: 
+        m_TimeoutSeconds: 600
+        m_FailOnNonZeroExitCode: 1
+        m_StreamOutput: 1

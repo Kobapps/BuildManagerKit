@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 614ccac47da544395976b01366217270, type: 3}
+  m_Name: Profile_Android
+  m_EditorClassIdentifier: BuildManagerKit.Editor::BuildManagerKit.Editor.BuildTargetProfile
+  m_Id: android
+  m_DisplayName: Android
+  m_Description: 
+  m_ProfileEnabled: 1
+  m_Target: 13
+  m_StandaloneSubtarget: 2
+  m_SceneSource: 0
+  m_Scenes: []
+  m_OutputDirectoryTemplate: '{projectRoot}/Builds/{env}/{target}/{version}+{buildNumber}'
+  m_ExecutableNameTemplate: '{productName}'
+  m_DevelopmentBuild: 0
+  m_AutoConnectProfiler: 0
+  m_DeepProfiling: 0
+  m_ScriptDebugging: 0
+  m_StrictMode: 1
+  m_CleanBuildCache: 0
+  m_DetailedBuildReport: 1
+  m_Compression: 0
+  m_ExtraScriptingDefines: []
+  m_PlayerOverrides:
+    overrideScriptingBackend: 0
+    scriptingBackend: 1
+    overrideIl2CppConfiguration: 0
+    il2CppConfiguration: 1
+    overrideStrippingLevel: 0
+    strippingLevel: 1
+  m_Android:
+    buildAppBundle: 1
+    splitApplicationBinary: 0
+    overrideArchitectures: 0
+    architectures: 2
+    useCustomKeystore: 0
+    keystorePath: 
+    keyaliasName: 
+    keystorePasswordEnvVar: ANDROID_KEYSTORE_PASS
+    keyaliasPasswordEnvVar: ANDROID_KEYALIAS_PASS
+  m_Ios:
+    overrideTeamId: 0
+    appleDeveloperTeamId: 
+    appendProject: 0
+  m_VersionSource: 0
+  m_Version: 1.0.0
+  m_VersionFilePath: version.txt
+  m_BuildNumberPolicy: 1
+  m_BuildNumber: 1
+  m_AllowedEnvironments: []
+  m_DefaultEnvironment: {fileID: 0}
+  m_PreBuildSteps:
+  - rid: 6714699482356777179
+  m_PostBuildSteps:
+  - rid: 6714699482356777182
+  references:
+    version: 2
+    RefIds:
+    - rid: 6714699482356777179
+      type: {class: RunShellCommandStep, ns: BuildManagerKit.Editor, asm: BuildManagerKit.Editor}
+      data:
+        m_Guid: 0bd1ef0b5b3c448fa49519236ae742c2
+        m_Enabled: 1
+        m_Label: 
+        m_OnError: 0
+        m_RunWhen: 0
+        m_EnvironmentFilter: 
+        m_Key: 
+        m_Command: echo Built {productName} {version} to {outputPath}
+        m_WorkingDirectory: 
+        m_TimeoutSeconds: 600
+        m_FailOnNonZeroExitCode: 1
+        m_StreamOutput: 1
+    - rid: 6714699482356777182
+      type: {class: WebhookNotificationStep, ns: BuildManagerKit.Editor, asm: BuildManagerKit.Editor}
+      data:
+        m_Guid: 2b83802bec9c4187848238f2bc8f9bd3
+        m_Enabled: 1
+        m_Label: 
+        m_OnError: 0
+        m_RunWhen: 0
+        m_EnvironmentFilter: 
+        m_Key: 
+        m_UrlEnvironmentVariable: BMK_WEBHOOK_URL
+        m_Url: 
+        m_Format: 0
+        m_Message: "{status}: *{productName}* {version}+{buildNumber} \xB7 {envName}
+          \xB7 {targetShort} \xB7 {branch}@{commit}"
+        m_TimeoutSeconds: 20

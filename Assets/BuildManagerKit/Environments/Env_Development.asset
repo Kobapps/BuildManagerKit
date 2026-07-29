@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d03d647b39b3541218697b358d03309a, type: 3}
+  m_Name: Env_Development
+  m_EditorClassIdentifier: BuildManagerKit.Editor::BuildManagerKit.Editor.BuildEnvironment
+  m_Id: dev
+  m_DisplayName: Dev
+  m_Description: 
+  m_Color: {r: 0.29, g: 0.66, b: 0.98, a: 1}
+  m_RequireConfirmation: 0
+  m_GenerateEnvironmentDefine: 1
+  m_ScriptingDefines: []
+  m_RemovedScriptingDefines: []
+  m_OverrideProductName: 0
+  m_ProductName: 
+  m_OverrideCompanyName: 0
+  m_CompanyName: 
+  m_OverrideApplicationIdentifier: 0
+  m_ApplicationIdentifier: 
+  m_ForceDevelopmentBuild: 0
+  m_OverrideApplicationIcon: 0
+  m_ApplicationIcon: {fileID: 0}
+  m_Variables: []
+  m_ConfigAssets: []
+  m_OnActivateSteps: []
+  m_PreBuildSteps: []
+  m_PostBuildSteps: []
+  references:
+    version: 2
+    RefIds: []

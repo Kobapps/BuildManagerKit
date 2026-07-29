@@ -1,0 +1,47 @@
+{
+  "name": "com.kobapps.buildmanagerkit",
+  "version": "1.0.0",
+  "displayName": "BuildManagerKit",
+  "description": "AAA-quality build pipeline, environment management and CI/CD automation for Unity 6. Reusable per-platform build profiles, first-class dev/stage/prod environments that also apply to the Editor, per-environment defines, identifiers, app icons and config assets, an extensible drag-and-drop pre/post build action system, build queues that survive domain reloads, a searchable build history, and a command line that exposes every build option so CI runs exactly the same pipeline as the button in the window.",
+  "unity": "6000.0",
+  "license": "MIT",
+  "documentationUrl": "https://github.com/Kobapps/BuildManagerKit#readme",
+  "changelogUrl": "https://github.com/Kobapps/BuildManagerKit/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Kobapps/BuildManagerKit/blob/main/LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kobapps/BuildManagerKit.git"
+  },
+  "keywords": [
+    "build",
+    "build-pipeline",
+    "build-automation",
+    "build-profiles",
+    "ci",
+    "cd",
+    "ci-cd",
+    "jenkins",
+    "github-actions",
+    "headless-build",
+    "command-line",
+    "multi-platform",
+    "environments",
+    "editor-tool"
+  ],
+  "author": {
+    "name": "Kobapps",
+    "url": "https://github.com/Kobapps"
+  },
+  "samples": [
+    {
+      "displayName": "Custom Build Steps",
+      "description": "Examples of custom scriptable pre/post build actions and code based build hooks.",
+      "path": "Samples~/CustomBuildSteps"
+    },
+    {
+      "displayName": "CI Templates",
+      "description": "Ready to use GitHub Actions, GitLab CI and Jenkins pipeline definitions.",
+      "path": "Samples~/CITemplates"
+    }
+  ]
+}

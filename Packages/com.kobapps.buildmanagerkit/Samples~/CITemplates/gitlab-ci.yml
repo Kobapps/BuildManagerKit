@@ -1,0 +1,63 @@
+# Build Manager Kit — GitLab CI reference pipeline.
+# Copy to .gitlab-ci.yml, or generate a filled-in version from the CI/CD tab.
+#
+# Set UNITY_LICENSE_CONTENT (or point at a floating licence server) in the project CI/CD variables.
+stages:
+  - validate
+  - build
+
+variables:
+  GIT_DEPTH: '0'                 # Build Manager Kit reads the git history for versioning
+  UNITY_IMAGE: unityci/editor:ubuntu-6000.5.0f1-linux-il2cpp-3
+
+default:
+  image: $UNITY_IMAGE
+  cache:
+    key: "$CI_PROJECT_NAME-$CI_JOB_NAME"
+    paths:
+      - Library/
+  before_script:
+    - chmod +x ci/activate.sh && ./ci/activate.sh
+
+# Cheap configuration check: missing modules, empty scene lists, absent scenes,
+# missing keystores, unset signing secrets. Seconds, not minutes.
+validate:
+  stage: validate
+  script:
+    - >
+      unity-editor
+      -batchmode -nographics -quit=false
+      -projectPath .
+      -executeMethod BuildManagerKit.Editor.BuildCLI.ValidateAll
+      -logFile /dev/stdout
+
+.build_template: &build
+  stage: build
+  script:
+    - >
+      unity-editor
+      -batchmode -nographics -quit=false
+      -projectPath .
+      -executeMethod BuildManagerKit.Editor.BuildCLI.Build
+      -bmkProfile "$BMK_PROFILE"
+      -bmkEnv "${BMK_ENV:-prod}"
+      -bmkResultFile build-result.json
+      -logFile /dev/stdout
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - Builds/
+      - build-result.json
+
+build:linux:
+  <<: *build
+  variables:
+    BMK_PROFILE: linux64
+
+build:android:
+  <<: *build
+  variables:
+    BMK_PROFILE: android
+  # Signing passwords come from masked CI/CD variables; the profile only stores their names.
+  # ANDROID_KEYSTORE_PASS and ANDROID_KEYALIAS_PASS

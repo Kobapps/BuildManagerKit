@@ -1,0 +1,99 @@
+# Build Manager Kit — GitHub Actions reference workflow.
+# Copy to .github/workflows/unity-build.yml, or generate a filled-in version from the CI/CD tab.
+#
+# Repository secrets required: UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD.
+name: Unity Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Build Manager Kit environment id
+        default: prod
+        required: true
+
+jobs:
+  # Cheap configuration check on every pull request.
+  validate:
+    name: Validate profiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          buildMethod: BuildManagerKit.Editor.BuildCLI.ValidateAll
+          allowDirtyBuild: true
+
+  build:
+    name: Build ${{ matrix.profile }}
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Use your own Build Manager Kit profile ids here.
+        profile: [ win64, android ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0          # required for git based versioning
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ runner.os }}-${{ matrix.profile }}-${{ hashFiles('Assets/**', 'Packages/**') }}
+          restore-keys: Library-${{ runner.os }}-${{ matrix.profile }}-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          BMK_WEBHOOK_URL: ${{ secrets.BMK_WEBHOOK_URL }}
+          ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          ANDROID_KEYALIAS_PASS: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+        with:
+          allowDirtyBuild: true
+          buildMethod: BuildManagerKit.Editor.BuildCLI.Build
+          customParameters: >-
+            -bmkProfile ${{ matrix.profile }}
+            -bmkEnv ${{ github.event.inputs.environment || 'prod' }}
+            -bmkResultFile ${{ github.workspace }}/build-result.json
+
+      - name: Summarise
+        if: always()
+        run: |
+          if [ -f build-result.json ]; then
+            python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open('build-result.json'))
+          print(f"### {r['statusText']} — {r['profileName']} ({r['environmentId']})")
+          print(f"- Version: `{r['version']}+{r['buildNumber']}`")
+          print(f"- Duration: {r['durationSeconds']:.0f}s")
+          print(f"- Size: {r['outputSizeBytes'] / 1048576:.1f} MB")
+          print(f"- Errors / warnings: {r['errors']} / {r['warnings']}")
+          PY
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.profile }}-result
+          path: build-result.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.profile }}
+          path: Builds/

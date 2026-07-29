@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 614ccac47da544395976b01366217270, type: 3}
+  m_Name: Profile_WebGL
+  m_EditorClassIdentifier: BuildManagerKit.Editor::BuildManagerKit.Editor.BuildTargetProfile
+  m_Id: webgl
+  m_DisplayName: WebGL
+  m_Description: 
+  m_ProfileEnabled: 1
+  m_Target: 20
+  m_StandaloneSubtarget: 2
+  m_SceneSource: 0
+  m_Scenes: []
+  m_OutputDirectoryTemplate: '{projectRoot}/Builds/{env}/{target}/{version}+{buildNumber}'
+  m_ExecutableNameTemplate: '{productName}'
+  m_DevelopmentBuild: 0
+  m_AutoConnectProfiler: 0
+  m_DeepProfiling: 0
+  m_ScriptDebugging: 0
+  m_StrictMode: 1
+  m_CleanBuildCache: 0
+  m_DetailedBuildReport: 1
+  m_Compression: 0
+  m_ExtraScriptingDefines: []
+  m_PlayerOverrides:
+    overrideScriptingBackend: 0
+    scriptingBackend: 1
+    overrideIl2CppConfiguration: 0
+    il2CppConfiguration: 1
+    overrideStrippingLevel: 0
+    strippingLevel: 1
+  m_Android:
+    buildAppBundle: 0
+    splitApplicationBinary: 0
+    overrideArchitectures: 0
+    architectures: 2
+    useCustomKeystore: 0
+    keystorePath: 
+    keyaliasName: 
+    keystorePasswordEnvVar: ANDROID_KEYSTORE_PASS
+    keyaliasPasswordEnvVar: ANDROID_KEYALIAS_PASS
+  m_Ios:
+    overrideTeamId: 0
+    appleDeveloperTeamId: 
+    appendProject: 0
+  m_VersionSource: 0
+  m_Version: 1.0.0
+  m_VersionFilePath: version.txt
+  m_BuildNumberPolicy: 1
+  m_BuildNumber: 1
+  m_AllowedEnvironments: []
+  m_DefaultEnvironment: {fileID: 0}
+  m_PreBuildSteps: []
+  m_PostBuildSteps: []
+  references:
+    version: 2
+    RefIds: []

@@ -1,0 +1,77 @@
+// Build Manager Kit — Jenkins declarative pipeline reference.
+// Copy to the repository root, or generate a filled-in version from the CI/CD tab.
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BMK_PROFILE', defaultValue: 'win64', description: 'Build Manager Kit profile id')
+        string(name: 'BMK_ENV',     defaultValue: 'prod',  description: 'Build Manager Kit environment id')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Validate and log without building')
+    }
+
+    environment {
+        // Configure a "Unity 6000.5.0f1" tool installation in Manage Jenkins ▸ Tools.
+        UNITY = "${tool 'Unity 6000.5.0f1'}/Editor/Unity"
+
+        // Secrets are injected as environment variables; the profile only stores their names.
+        BMK_WEBHOOK_URL       = credentials('bmk-webhook-url')
+        ANDROID_KEYSTORE_PASS = credentials('android-keystore-pass')
+        ANDROID_KEYALIAS_PASS = credentials('android-keyalias-pass')
+    }
+
+    options {
+        timeout(time: 2, unit: 'HOURS')
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Full history: Build Manager Kit reads git for versioning and build numbers.
+                checkout scm
+                sh 'git fetch --unshallow || true'
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                sh '''
+                    "$UNITY" -batchmode -nographics -quit=false -projectPath "$WORKSPACE" \
+                        -executeMethod BuildManagerKit.Editor.BuildCLI.ValidateAll \
+                        -logFile /dev/stdout
+                '''
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    def dryRun = params.DRY_RUN ? '-bmkDryRun' : ''
+                    sh """
+                        "\$UNITY" -batchmode -nographics -quit=false -projectPath "\$WORKSPACE" \
+                            -executeMethod BuildManagerKit.Editor.BuildCLI.Build \
+                            -bmkProfile "${params.BMK_PROFILE}" \
+                            -bmkEnv "${params.BMK_ENV}" \
+                            -bmkResultFile "\$WORKSPACE/build-result.json" \
+                            ${dryRun} \
+                            -logFile /dev/stdout
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'build-result.json, Builds/**', allowEmptyArchive: true
+
+            script {
+                if (fileExists('build-result.json')) {
+                    def r = readJSON file: 'build-result.json'
+                    currentBuild.description =
+                        "${r.statusText} · ${r.profileName} · ${r.version}+${r.buildNumber}"
+                }
+            }
+        }
+    }
+}
