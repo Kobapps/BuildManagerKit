@@ -6,6 +6,13 @@
       "source": "embedded",
       "dependencies": {}
     },
+    "com.kobapps.editorcorekit": {
+      "version": "https://github.com/Kobapps/EditorCoreKit.git?path=Packages/com.kobapps.editorcorekit",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "c1c4162f9ea7b609e948823cbd6649e0a524f73b"
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.13",
       "depth": 0,

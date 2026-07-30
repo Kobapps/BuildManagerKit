@@ -40,6 +40,13 @@ Add it from the Package Manager with
 newer. The runtime assembly contains a single
 small `ScriptableObject`; everything else is editor only.
 
+The window is built on [EditorCoreKit](https://github.com/Kobapps/EditorCoreKit), so add that too —
+`https://github.com/Kobapps/EditorCoreKit.git?path=Packages/com.kobapps.editorcorekit`. It is a
+git-only package, which the Package Manager cannot resolve from another package's manifest, so it
+has to be added to the project rather than pulled in automatically; without it the editor assembly
+does not compile. Every theme and density it ships applies to this window too — choose one under
+`Preferences ▸ EditorCoreKit`.
+
 ## Two minute setup
 
 1. `Tools ▸ Build Manager Kit ▸ Create Starter Setup` — creates the settings asset, the
@@ -67,7 +74,7 @@ you nine builds without duplicating a single setting.
 
 | Tab | Purpose |
 | --- | --- |
-| **Dashboard** | Active environment and platform, the next build's resolved output path, Build / Dry Run / Validate, a live console and recent runs. |
+| **Dashboard** | Active environment and platform, the next build's resolved output path, Build / Build and Run / Dry Run / Validate, a live console and recent runs. |
 | **Profiles** | The profile catalogue plus the full configuration, versioning and both action lists. Delete a profile from its header or by right-clicking its row. |
 | **Environments** | The pinned common configuration item, plus creating, editing, reordering, activating and deleting environments. |
 | **Queues** | Multi-platform batches and their progress. |
@@ -77,8 +84,24 @@ you nine builds without duplicating a single setting.
 
 The header has two pills — the active environment and the Editor platform — and one **Build**
 button. The wide half builds the selected profile; the ▼ half lists every profile with its platform
-icon, so building a specific target is one click and the choice becomes the new selection. Dry Run
-and Validate live in the same menu.
+icon, so building a specific target is one click and the choice becomes the new selection. Build and
+Run, Dry Run and Validate live in the same menu.
+
+**Build and Run** builds and then launches, which is Unity's own *Build And Run* with the pipeline
+around it: a standalone player starts on this machine, an Android or iOS build is deployed to the
+connected device, and a WebGL build opens in a browser. It is a property of the press rather than of
+the profile, so no profile can ever launch a player on a build server; on the command line it is
+`-bmkRun`. Keyboard: `⌘⇧⌥B` builds, `⌘⇧⌥R` builds and runs.
+
+**Open Output Folder** — in the status bar as **Builds**, in the ▼ and ⋮ menus, on the Dashboard
+under the resolved path, in a profile's header and inspector, and under
+*Tools ▸ Build Manager Kit*. It resolves the selected profile's output template exactly as a build
+would, so it lands where the builds actually are. Nothing is created: a profile that has not been
+built yet opens the deepest folder of that path that does exist and says which one that was.
+
+The window is built on [EditorCoreKit](https://github.com/Kobapps/EditorCoreKit), so its theme and
+density are the ones every tool built on that kit shares — pick them in the Settings tab, under
+`Preferences ▸ EditorCoreKit`, or from *Tools ▸ EditorCoreKit ▸ Theme Settings*.
 
 There are two more places to switch environment without opening anything:
 
@@ -429,6 +452,7 @@ default, so `-bmkStrictMode false` and "not passing `-bmkStrictMode`" mean diffe
 | `-bmkKeyalias` | name | Android key alias |
 | `-bmkAppleTeamId` | id | Apple Developer Team ID |
 | `-bmkDryRun` | — | Validate and log without building |
+| `-bmkRun` | — | Launch the player once it is built — the command line form of **Build and Run** |
 | `-bmkNoPlatformSwitch` | — | Fail instead of switching the active platform |
 | `-bmkResultFile` | path | Where to write the JSON result |
 | `-bmkNoExit` | — | Do not call `EditorApplication.Exit` |

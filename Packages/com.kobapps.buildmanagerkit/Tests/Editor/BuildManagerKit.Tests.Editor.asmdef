@@ -4,6 +4,7 @@
     "references": [
         "BuildManagerKit.Runtime",
         "BuildManagerKit.Editor",
+        "EditorCoreKit.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

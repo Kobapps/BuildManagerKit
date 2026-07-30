@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -63,54 +64,53 @@ namespace BuildManagerKit.Editor
             if (!m_CommonSelected)
                 m_Selected ??= Settings.ActiveEnvironment ?? Settings.GetSortedEnvironments().FirstOrDefault();
 
-            var root = new VisualElement();
-            root.AddToClassList("bmk-split");
+            var split = new EckSplitView(220f, false, "BuildManagerKit.Environments");
+            split.First.Add(BuildMasterList());
+            split.Second.Add(m_CommonSelected ? BuildCommonDetail() : BuildDetail());
 
-            root.Add(BuildMasterList());
-            root.Add(m_CommonSelected ? BuildCommonDetail() : BuildDetail());
-
-            return root;
+            return split;
         }
 
         private VisualElement BuildMasterList()
         {
             var master = new VisualElement();
-            master.AddToClassList("bmk-master");
+            master.style.flexGrow = 1;
+            master.style.minHeight = 0;
+            master.style.marginRight = 6;
 
             // The common configuration reads as one more thing you can select and edit, but it is not
             // an environment and must not look like one in the list — so it sits in its own section
             // above, outside the reorderable list.
-            master.Add(BuildManagerUI.SectionTitle("Shared by every environment"));
+            master.Add(EckText.SectionTitle("Shared by every environment"));
             master.Add(CreateCommonRow());
-            master.Add(BuildManagerUI.Separator());
-            master.Add(BuildManagerUI.SectionTitle("Environments"));
+            master.Add(EckLayout.Separator());
+            master.Add(EckText.SectionTitle("Environments"));
 
-            var toolbar = new VisualElement();
-            toolbar.AddToClassList("bmk-toolbar");
-            toolbar.Add(new Button(() =>
+            var toolbar = new EckToolbar();
+            toolbar.Add(EckButton.Secondary(EckIcons.Plus + " New", () =>
             {
                 m_Selected = BuildManagerBootstrap.CreateEnvironment("new", "New Environment", Color.gray);
                 m_CommonSelected = false;
                 Window.RefreshCurrentView();
-            }) { text = "+ New" });
+            }));
 
-            toolbar.Add(new Button(() =>
+            toolbar.Add(EckButton.Secondary("Starter Set", () =>
             {
                 BuildManagerBootstrap.CreateDefaultEnvironments();
                 Window.RefreshCurrentView();
-            }) { text = "Starter Set" });
+            }));
 
             master.Add(toolbar);
 
             if (Settings.Environments.Count == 0)
             {
-                master.Add(BuildManagerUI.Muted("No environments yet."));
+                master.Add(EckEmptyState.Line("No environments yet."));
                 return master;
             }
 
             master.Add(BuildEnvironmentList());
-            master.Add(BuildManagerUI.Muted("Drag to reorder. The order here drives the toolbar "
-                                            + "dropdown, the Scene view overlay and every menu."));
+            master.Add(EckText.Muted("Drag to reorder. The order here drives the toolbar "
+                                     + "dropdown, the Scene view overlay and every menu."));
 
             return master;
         }
@@ -122,40 +122,24 @@ namespace BuildManagerKit.Editor
         /// </summary>
         private VisualElement CreateCommonRow()
         {
-            var row = new VisualElement();
-            row.AddToClassList("bmk-list-item");
-            row.AddToClassList("bmk-common-row");
-
-            if (m_CommonSelected)
-                row.AddToClassList("bmk-list-item--selected");
-
-            var dot = new VisualElement();
-            dot.AddToClassList("bmk-pill__dot");
-            dot.style.backgroundColor = new Color(0.62f, 0.62f, 0.66f);
-
-            var label = new Label("Common configuration");
-            label.AddToClassList("bmk-grow");
-            label.style.fontSize = 11;
-            label.style.overflow = Overflow.Hidden;
-
-            row.tooltip = "Product and company name, bundle identifier, icon, shared runtime variables and "
-                          + "versioning. Every environment starts from these.";
-
-            row.Add(dot);
-            row.Add(label);
-
-            if (!Settings.Common.IsConfigured)
-            {
-                var empty = BuildManagerUI.Badge("EMPTY", "neutral");
-                empty.tooltip = "Nothing is shared yet.";
-                row.Add(empty);
-            }
-
-            row.RegisterCallback<MouseDownEvent>(_ =>
+            var row = new EckListRow("Common configuration", () =>
             {
                 m_CommonSelected = true;
                 Window.RefreshCurrentView();
             });
+
+            row.AddToClassList("bmk-common-row");
+            row.Selected = m_CommonSelected;
+            row.WithDot(new Color(0.62f, 0.62f, 0.66f));
+
+            row.tooltip = "Product and company name, bundle identifier, icon, shared runtime variables and "
+                          + "versioning. Every environment starts from these.";
+
+            if (!Settings.Common.IsConfigured)
+            {
+                var empty = new EckBadge("EMPTY") { tooltip = "Nothing is shared yet." };
+                row.WithAction(empty);
+            }
 
             return row;
         }
@@ -168,30 +152,21 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildCommonDetail()
         {
             var detail = new ScrollView();
-            detail.AddToClassList("bmk-detail");
+            detail.AddToClassList(EckClass.Detail);
 
             var serializedObject = new SerializedObject(Settings);
             var common = serializedObject.FindProperty("m_Common");
 
-            var header = BuildManagerUI.Card(null, null, new Color(0.62f, 0.62f, 0.66f));
-            var headerRow = new VisualElement();
-            headerRow.AddToClassList("bmk-row");
+            var header = new EckCard("Common configuration", null, new Color(0.62f, 0.62f, 0.66f));
+            header.Header.Add(EckBadge.Tag("SHARED"));
+            header.WithHeaderAction(EckButton.Secondary("Ping Settings Asset",
+                () => EditorGUIUtility.PingObject(Settings)));
 
-            var title = new Label("Common configuration");
-            title.AddToClassList("bmk-card__title");
-            title.style.marginBottom = 0;
-
-            headerRow.Add(title);
-            headerRow.Add(BuildManagerUI.Badge("SHARED", "neutral"));
-            headerRow.Add(BuildManagerUI.Spacer());
-            headerRow.Add(new Button(() => EditorGUIUtility.PingObject(Settings)) { text = "Ping Settings Asset" });
-            header.Add(headerRow);
-
-            var summary = BuildManagerUI.Muted(string.Empty);
+            var summary = EckText.Muted(string.Empty);
             header.Add(summary);
             detail.Add(header);
 
-            var values = BuildManagerUI.Card(
+            var values = new EckCard(
                 "Player settings",
                 "Applied to every environment that does not fill the same field in itself. An empty field "
                 + "means Build Manager Kit does not manage it, and the project's own player settings are "
@@ -215,7 +190,7 @@ namespace BuildManagerKit.Editor
 
             detail.Add(BuildCommonIconCard(serializedObject, common));
 
-            var variables = BuildManagerUI.Card(
+            var variables = new EckCard(
                 "Shared runtime variables",
                 "Baked into BuildInfo for every environment and readable with "
                 + "BuildInfo.Current.GetVariable(key). An environment declaring the same key overrides the "
@@ -226,7 +201,7 @@ namespace BuildManagerKit.Editor
             variables.Add(variablesField);
             detail.Add(variables);
 
-            var versioning = BuildManagerUI.Card(
+            var versioning = new EckCard(
                 "Versioning",
                 "Where the version string and the build number come from, for every environment and every "
                 + "profile that does not version itself.");
@@ -262,48 +237,36 @@ namespace BuildManagerKit.Editor
         {
             var iconProperty = common.FindPropertyRelative("applicationIcon");
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Application icon",
                 "Used by every environment that does not assign its own. Applied when an environment is "
                 + "activated and when it is built, then restored with the rest of the player settings.");
 
-            var body = new VisualElement();
-            body.AddToClassList("bmk-icon-row");
-            card.Add(body);
-
-            var frame = new VisualElement();
-            frame.AddToClassList("bmk-icon-frame");
-            body.Add(frame);
-
-            var preview = new Image { scaleMode = ScaleMode.ScaleToFit };
-            preview.AddToClassList("bmk-icon-image");
-            frame.Add(preview);
-
-            var emptyLabel = new Label("no icon");
-            emptyLabel.AddToClassList("bmk-icon-empty-label");
-            frame.Add(emptyLabel);
+            var preview = new EckThumbnail(76f, "no icon");
 
             var fields = new VisualElement();
-            fields.AddToClassList("bmk-icon-fields");
-            body.Add(fields);
+            fields.style.flexGrow = 1;
+            fields.style.marginLeft = 10;
+            fields.style.minWidth = 0;
 
             var iconField = new PropertyField(iconProperty, "Icon texture");
             iconField.Bind(serializedObject);
             fields.Add(iconField);
 
-            var detailLabel = BuildManagerUI.Muted(string.Empty);
+            var detailLabel = EckText.Muted(string.Empty);
             fields.Add(detailLabel);
+
+            var body = EckLayout.Row(preview, fields);
+            body.AddToClassList(EckClass.RowTop);
+            body.style.marginTop = 8;
+            card.Add(body);
 
             void Refresh()
             {
                 serializedObject.Update();
 
                 var texture = iconProperty.objectReferenceValue as Texture2D;
-
-                preview.image = texture;
-                preview.style.display = texture != null ? DisplayStyle.Flex : DisplayStyle.None;
-                emptyLabel.style.display = texture != null ? DisplayStyle.None : DisplayStyle.Flex;
-                frame.EnableInClassList("bmk-icon-frame--empty", texture == null);
+                preview.SetAsset(texture);
 
                 detailLabel.text = texture != null
                     ? $"{texture.width} × {texture.height} · {texture.format}"
@@ -331,8 +294,8 @@ namespace BuildManagerKit.Editor
             scroll.style.minHeight = 0;
 
             var list = new VisualElement();
-            list.AddToClassList("bmk-list");
-            list.AddToClassList("bmk-reorder-host");
+            list.AddToClassList(EckClass.List);
+            list.AddToClassList(EckClass.ReorderHost);
 
             var environments = Settings.EnvironmentsMutable;
 
@@ -345,56 +308,29 @@ namespace BuildManagerKit.Editor
 
         private VisualElement CreateEnvironmentRow(VisualElement container, BuildEnvironment environment)
         {
-            var row = new VisualElement();
-            row.AddToClassList("bmk-list-item");
-
-            var handle = DragReorder.CreateHandle("Drag to reorder — this order drives every switcher");
-            row.Add(handle);
-
             if (environment == null)
             {
                 // A deleted asset still occupies a slot; show it so it can be found and removed
                 // rather than silently shifting every index below it.
-                var missing = new Label("(missing environment)");
-                missing.AddToClassList("bmk-grow");
-                missing.style.fontSize = 11;
+                var missing = new EckListRow("(missing environment)")
+                    .WithDragHandle(container, OnReordered);
+
                 missing.style.opacity = 0.6f;
-
-                row.tooltip = "This slot points at a deleted asset. Use Rescan to tidy up.";
-                row.Add(missing);
-
-                DragReorder.Attach(container, row, handle, OnReordered);
-                return row;
+                missing.tooltip = "This slot points at a deleted asset. Use Rescan to tidy up.";
+                return missing;
             }
 
-            if (environment == m_Selected)
-                row.AddToClassList("bmk-list-item--selected");
+            var captured = environment;
 
-            var dot = new VisualElement();
-            dot.AddToClassList("bmk-pill__dot");
-            dot.style.backgroundColor = environment.Color;
+            var row = new EckListRow(environment.DisplayName, () => Select(captured))
+                .WithDragHandle(container, OnReordered)
+                .WithDot(environment.Color);
 
-            var label = new Label(environment.DisplayName);
-            label.AddToClassList("bmk-grow");
-            label.style.fontSize = 11;
-            label.style.overflow = Overflow.Hidden;
-
+            row.Selected = environment == m_Selected;
             row.tooltip = $"{environment.DisplayName} ({environment.Id})";
-            row.Add(dot);
-            row.Add(label);
 
             if (environment == Settings.ActiveEnvironment)
-                row.Add(BuildManagerUI.Badge("ACTIVE", "success"));
-
-            var captured = environment;
-            row.RegisterCallback<MouseDownEvent>(evt =>
-            {
-                // The grip owns its own pointer events; clicking anywhere else selects.
-                if (evt.target == handle)
-                    return;
-
-                Select(captured);
-            });
+                row.WithBadge("ACTIVE", EckTone.Success);
 
             // Right-click straight on the row: the same actions as the detail header, where deleting
             // one of a long list is actually convenient.
@@ -416,7 +352,6 @@ namespace BuildManagerKit.Editor
                 evt.menu.AppendAction("Delete…", _ => DeleteEnvironment(captured));
             }));
 
-            DragReorder.Attach(container, row, handle, OnReordered);
             return row;
         }
 
@@ -446,13 +381,14 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildDetail()
         {
             var detail = new ScrollView();
-            detail.AddToClassList("bmk-detail");
+            detail.AddToClassList(EckClass.Detail);
 
             if (m_Selected == null)
             {
-                detail.Add(BuildManagerUI.EmptyState(
-                    "Environments let one set of profiles produce dev, stage and prod builds — and let the Editor "
-                    + "reproduce any of them while you work.",
+                detail.Add(new EckEmptyState(
+                    "No environments yet",
+                    "Environments let one set of profiles produce dev, stage and prod builds — and let the "
+                    + "Editor reproduce any of them while you work.",
                     "Create dev / stage / prod",
                     () =>
                     {
@@ -466,15 +402,9 @@ namespace BuildManagerKit.Editor
             var serializedObject = new SerializedObject(m_Selected);
             var isActive = m_Selected == Settings.ActiveEnvironment;
 
-            var header = BuildManagerUI.Card(null, null, m_Selected.Color);
-            var headerRow = new VisualElement();
-            headerRow.AddToClassList("bmk-row");
+            var header = new EckCard(m_Selected.DisplayName, null, m_Selected.Color);
 
-            var title = new Label(m_Selected.DisplayName);
-            title.AddToClassList("bmk-card__title");
-            title.style.marginBottom = 0;
-
-            var activate = BuildManagerUI.PrimaryButton(isActive ? "Active" : "Make Active", () =>
+            var activate = EckButton.Primary(isActive ? "Active" : "Make Active", () =>
             {
                 EnvironmentManager.Activate(m_Selected, true);
                 Window.RefreshHeader();
@@ -482,36 +412,28 @@ namespace BuildManagerKit.Editor
             });
             activate.SetEnabled(!isActive);
 
-            var ping = new Button(() => EditorGUIUtility.PingObject(m_Selected)) { text = "Ping Asset" };
+            header.WithHeaderAction(EckButton.Secondary("Ping Asset",
+                () => EditorGUIUtility.PingObject(m_Selected)));
 
-            var delete = new Button(() => DeleteEnvironment(m_Selected))
-            {
-                text = "Delete",
-                tooltip = "Delete this environment asset and remove it from the settings, the queues and the "
-                          + "profiles that reference it."
-            };
-            delete.AddToClassList("bmk-button-danger");
+            header.WithHeaderAction(EckButton.Danger("Delete", () => DeleteEnvironment(m_Selected))
+                .Tip("Delete this environment asset and remove it from the settings, the queues and the "
+                     + "profiles that reference it."));
 
-            headerRow.Add(title);
-            headerRow.Add(BuildManagerUI.Spacer());
-            headerRow.Add(ping);
-            headerRow.Add(delete);
-            headerRow.Add(activate);
-            header.Add(headerRow);
+            header.WithHeaderAction(activate);
 
             var define = m_Selected.EnvironmentDefine;
-            header.Add(BuildManagerUI.KeyValue("Generated define", string.IsNullOrEmpty(define) ? "disabled" : define));
-            header.Add(BuildManagerUI.KeyValue("Runtime access",
+            header.Add(EckText.KeyValue("Generated define", string.IsNullOrEmpty(define) ? "disabled" : define));
+            header.Add(EckText.KeyValue("Runtime access",
                 $"BuildInfo.Current.IsEnvironment(\"{m_Selected.Id}\")"));
 
             var inheritance = ConfigResolver.DescribeInheritance(Settings, m_Selected);
             if (!string.IsNullOrEmpty(inheritance))
-                header.Add(BuildManagerUI.Muted(inheritance));
+                header.Add(EckText.Muted(inheritance));
 
             detail.Add(header);
 
-            var configuration = BuildManagerUI.Card("Configuration");
-            BuildManagerUI.DrawChildren(configuration, serializedObject.GetIterator(), serializedObject,
+            var configuration = new EckCard("Configuration");
+            EckProperty.DrawChildren(configuration, serializedObject.GetIterator(), serializedObject,
                 k_HiddenFields);
             detail.Add(configuration);
 
@@ -521,7 +443,7 @@ namespace BuildManagerKit.Editor
             detail.Add(BuildPublishedAssetsCard());
             detail.Add(BuildGlobalActionsBanner());
 
-            var activateCard = BuildManagerUI.Card();
+            var activateCard = new EckCard();
             activateCard.Add(new StepListView(serializedObject, "m_OnActivateSteps",
                 BuildStepScope.EnvironmentActivate,
                 "On activate actions",
@@ -530,14 +452,14 @@ namespace BuildManagerKit.Editor
                 BuildStepScopeLevel.Environment));
             detail.Add(activateCard);
 
-            var preCard = BuildManagerUI.Card();
+            var preCard = new EckCard();
             preCard.Add(new StepListView(serializedObject, "m_PreBuildSteps", BuildStepScope.PreBuild,
                 "Pre build actions",
                 "Run for every profile built with this environment.",
                 BuildStepScopeLevel.Environment));
             detail.Add(preCard);
 
-            var postCard = BuildManagerUI.Card();
+            var postCard = new EckCard();
             postCard.Add(new StepListView(serializedObject, "m_PostBuildSteps", BuildStepScope.PostBuild,
                 "Post build actions",
                 "Run for every profile built with this environment.",
@@ -620,7 +542,7 @@ namespace BuildManagerKit.Editor
         /// </summary>
         private VisualElement BuildCommonConfigCard(SerializedObject serializedObject)
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Player settings",
                 "Fill a field in only where this environment differs from the common configuration; clear it "
                 + "to go back to the shared value, shown greyed. Applied when this environment is activated "
@@ -636,7 +558,7 @@ namespace BuildManagerKit.Editor
                 text.textEdition.placeholder = commonValue ?? "not set";
                 card.Add(text);
 
-                var origin = BuildManagerUI.Muted(string.Empty);
+                var origin = EckText.Muted(string.Empty);
                 origin.AddToClassList("bmk-inherited__label");
                 card.Add(origin);
 
@@ -695,7 +617,7 @@ namespace BuildManagerKit.Editor
             var overrideProperty = serializedObject.FindProperty("m_OverrideVersioning");
             var versioningProperty = serializedObject.FindProperty("m_Versioning");
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Versioning",
                 "Switch on only when builds of this environment carry a different version from the common "
                 + "configuration — staging shipping a release candidate, for instance. A profile that versions "
@@ -705,7 +627,7 @@ namespace BuildManagerKit.Editor
             toggle.Bind(serializedObject);
             card.Add(toggle);
 
-            var inherited = BuildManagerUI.Muted(string.Empty);
+            var inherited = EckText.Muted(string.Empty);
             inherited.AddToClassList("bmk-inherited__label");
             card.Add(inherited);
 
@@ -739,11 +661,6 @@ namespace BuildManagerKit.Editor
         }
 
         /// <summary>
-        /// The config assets this environment actually publishes: the project-wide defaults with
-        /// its own entries layered on top. Shows which key comes from where, because "why is
-        /// Get&lt;T&gt; returning the wrong asset" is otherwise a guessing game.
-        /// </summary>
-        /// <summary>
         /// The application icon of one environment, with a live preview.
         ///
         /// Drawn by hand rather than left to the generic property loop because an icon is the one
@@ -755,38 +672,30 @@ namespace BuildManagerKit.Editor
             var iconProperty = serializedObject.FindProperty("m_ApplicationIcon");
             var commonIcon = Settings.Common.ApplicationIconOverride;
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Application icon",
                 "A badged or tinted icon per environment stops a tester filing a bug against the wrong "
                 + "build. Applied when this environment is activated and when it is built, then restored "
                 + "with the rest of the player settings — so it never leaks into a production player.");
 
-            var body = new VisualElement();
-            body.AddToClassList("bmk-icon-row");
-            card.Add(body);
-
-            var frame = new VisualElement();
-            frame.AddToClassList("bmk-icon-frame");
-            body.Add(frame);
-
-            var preview = new Image { scaleMode = ScaleMode.ScaleToFit };
-            preview.AddToClassList("bmk-icon-image");
-            frame.Add(preview);
-
-            var emptyLabel = new Label("no icon");
-            emptyLabel.AddToClassList("bmk-icon-empty-label");
-            frame.Add(emptyLabel);
+            var preview = new EckThumbnail(76f, "no icon");
 
             var fields = new VisualElement();
-            fields.AddToClassList("bmk-icon-fields");
-            body.Add(fields);
+            fields.style.flexGrow = 1;
+            fields.style.marginLeft = 10;
+            fields.style.minWidth = 0;
 
             var iconField = new PropertyField(iconProperty, "Icon texture");
             iconField.Bind(serializedObject);
             fields.Add(iconField);
 
-            var detailLabel = BuildManagerUI.Muted(string.Empty);
+            var detailLabel = EckText.Muted(string.Empty);
             fields.Add(detailLabel);
+
+            var body = EckLayout.Row(preview, fields);
+            body.AddToClassList(EckClass.RowTop);
+            body.style.marginTop = 8;
+            card.Add(body);
 
             void Refresh()
             {
@@ -798,12 +707,7 @@ namespace BuildManagerKit.Editor
 
                 // The shared icon is what an empty field actually produces, so preview that rather
                 // than an empty frame that would suggest no icon at all.
-                var shown = texture != null ? texture : commonIcon;
-
-                preview.image = shown;
-                preview.style.display = shown != null ? DisplayStyle.Flex : DisplayStyle.None;
-                emptyLabel.style.display = shown != null ? DisplayStyle.None : DisplayStyle.Flex;
-                frame.EnableInClassList("bmk-icon-frame--empty", shown == null);
+                preview.SetAsset(texture != null ? texture : commonIcon);
 
                 detailLabel.text = texture != null
                     ? $"{texture.width} × {texture.height} · {texture.format}"
@@ -820,11 +724,16 @@ namespace BuildManagerKit.Editor
             return card;
         }
 
+        /// <summary>
+        /// The config assets this environment actually publishes: the project-wide defaults with
+        /// its own entries layered on top. Shows which key comes from where, because "why is
+        /// Get&lt;T&gt; returning the wrong asset" is otherwise a guessing game.
+        /// </summary>
         private VisualElement BuildPublishedAssetsCard()
         {
             var resolved = EnvironmentAssetsWriter.Resolve(m_Selected, Settings);
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Published config assets",
                 "Readable at runtime with EnvironmentAssets.Current.Get<T>(key). Only these assets are "
                 + "referenced by the generated Resources asset, so the other environments' assets stay out "
@@ -832,7 +741,7 @@ namespace BuildManagerKit.Editor
 
             if (resolved.Count == 0)
             {
-                card.Add(BuildManagerUI.Muted(
+                card.Add(EckEmptyState.Line(
                     "None yet. Add key/asset pairs under Config Assets above, or set project-wide defaults "
                     + "in the Settings tab."));
 
@@ -844,7 +753,7 @@ namespace BuildManagerKit.Editor
                 var ownEntry = m_Selected.GetConfigAsset(entry.key) != null;
                 var typeName = entry.asset != null ? entry.asset.GetType().Name : "missing";
 
-                var row = BuildManagerUI.KeyValue(
+                var row = EckText.KeyValue(
                     entry.key,
                     $"{entry.asset.name}  ({typeName})" + (ownEntry ? string.Empty : "  · inherited default"));
 
@@ -855,13 +764,8 @@ namespace BuildManagerKit.Editor
                 card.Add(row);
             }
 
-            var usage = new TextField
-            {
-                multiline = true,
-                isReadOnly = true,
-                value = $"var asset = EnvironmentAssets.Current.Get<YourType>(\"{resolved[0].key}\");"
-            };
-            usage.AddToClassList("bmk-code");
+            var usage = EckText.Code(
+                $"var asset = EnvironmentAssets.Current.Get<YourType>(\"{resolved[0].key}\");");
             usage.style.marginTop = 6;
             card.Add(usage);
 

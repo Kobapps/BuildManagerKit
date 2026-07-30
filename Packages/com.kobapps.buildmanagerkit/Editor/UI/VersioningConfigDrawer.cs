@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
@@ -63,7 +64,7 @@ namespace BuildManagerKit.Editor
             counter.tooltip = "The stored counter. Auto Increment bumps it after every successful build.";
             numberDetails.Add(counter);
 
-            var summary = BuildManagerUI.Muted(string.Empty);
+            var summary = EckText.Muted(string.Empty);
             root.Add(summary);
 
             void Refresh()

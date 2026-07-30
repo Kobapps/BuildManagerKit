@@ -1,4 +1,5 @@
 using System.IO;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -29,14 +30,12 @@ namespace BuildManagerKit.Editor
         private void CreateGUI()
         {
             BuildManagerUI.ApplyStyles(rootVisualElement);
-            rootVisualElement.AddToClassList("bmk-root");
 
-            var scroll = new ScrollView();
-            scroll.AddToClassList("bmk-scroll");
-            rootVisualElement.Add(scroll);
+            var page = EckLayout.Page();
+            rootVisualElement.Add(page);
 
             m_Body = new VisualElement();
-            scroll.Add(m_Body);
+            page.Add(m_Body);
 
             Rebuild();
         }
@@ -48,12 +47,12 @@ namespace BuildManagerKit.Editor
 
             if (AgentSkill.SourcePath == null)
             {
-                var missing = BuildManagerUI.Card(
+                m_Body.Add(new EckBanner(
+                    EckTone.Error,
                     "Skill not found in the package",
                     "This copy of Build Manager Kit does not contain Skills~/buildmanagerkit. If you are "
-                    + "working from a partial checkout, restore the package and reopen this window.");
+                    + "working from a partial checkout, restore the package and reopen this window."));
 
-                m_Body.Add(missing);
                 return;
             }
 
@@ -73,20 +72,20 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildIntroCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "AI assistant skill",
                 "Teaches a coding agent — Claude Code and other agents that read .claude/skills — how to "
                 + "manage this project's environments, config assets and builds correctly.");
 
-            card.Add(BuildManagerUI.Muted(
+            card.Add(EckText.Body(
                 "Without it an agent will try to edit the .asset files as text. That looks like it works "
                 + "and silently drops action lists and asset references, because they are "
                 + "[SerializeReference] entries and GUID pairs rather than plain values. The skill routes "
                 + "the agent through the command line instead, which validates every change and runs the "
                 + "project health check afterwards."));
 
-            card.Add(BuildManagerUI.KeyValue("Skill name", AgentSkill.SkillName));
-            card.Add(BuildManagerUI.KeyValue("Ships with", "Build Manager Kit " + AgentSkill.PackageVersion));
+            card.Add(EckText.KeyValue("Skill name", AgentSkill.SkillName));
+            card.Add(EckText.KeyValue("Ships with", "Build Manager Kit " + AgentSkill.PackageVersion));
 
             return card;
         }
@@ -96,49 +95,39 @@ namespace BuildManagerKit.Editor
             var state = AgentSkill.GetState(scope);
             var path = AgentSkill.GetInstallPath(scope);
 
-            var card = BuildManagerUI.Card(title, explanation);
+            var card = new EckCard(title, explanation);
+            card.Header.Insert(0, StateBadge(state));
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-            header.Add(StateBadge(state));
-            header.Add(BuildManagerUI.Spacer());
-            card.Add(header);
+            card.Add(EckText.Code(path));
 
-            var pathLabel = new Label(path);
-            pathLabel.AddToClassList("bmk-mono");
-            pathLabel.AddToClassList("bmk-muted");
-            pathLabel.style.whiteSpace = WhiteSpace.Normal;
-            card.Add(pathLabel);
-
-            var buttons = new VisualElement();
-            buttons.AddToClassList("bmk-row");
+            var buttons = EckLayout.Row();
             buttons.style.marginTop = 8;
 
             switch (state)
             {
                 case AgentSkillState.NotInstalled:
-                    buttons.Add(BuildManagerUI.PrimaryButton("Install", () => Install(scope)));
+                    buttons.Add(EckButton.Primary("Install", () => Install(scope)));
                     break;
 
                 case AgentSkillState.Outdated:
-                    buttons.Add(BuildManagerUI.PrimaryButton("Update", () => Install(scope)));
-                    buttons.Add(new Button(() => Remove(scope)) { text = "Remove" });
+                    buttons.Add(EckButton.Primary("Update", () => Install(scope)));
+                    buttons.Add(EckButton.Secondary("Remove", () => Remove(scope)));
                     break;
 
                 case AgentSkillState.UpToDate:
-                    buttons.Add(new Button(() => Install(scope)) { text = "Reinstall" });
-                    buttons.Add(new Button(() => Remove(scope)) { text = "Remove" });
+                    buttons.Add(EckButton.Secondary("Reinstall", () => Install(scope)));
+                    buttons.Add(EckButton.Secondary("Remove", () => Remove(scope)));
                     break;
             }
 
             if (Directory.Exists(path))
-                buttons.Add(new Button(() => EditorUtility.RevealInFinder(path)) { text = "Reveal" });
+                buttons.Add(EckButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(path)));
 
             card.Add(buttons);
 
             if (state == AgentSkillState.Outdated)
             {
-                card.Add(BuildManagerUI.Muted(
+                card.Add(EckText.Muted(
                     "The installed copy differs from the one in the package — either it came from an older "
                     + "version, or it has local edits. Updating overwrites it."));
             }
@@ -148,18 +137,13 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildContentsCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "What gets written",
                 "Plain markdown. Nothing executable, and nothing inside Assets/.");
 
-            foreach (var file in AgentSkill.GetFileList())
-            {
-                var label = new Label("  " + file);
-                label.AddToClassList("bmk-mono");
-                card.Add(label);
-            }
+            card.Add(EckText.Code(string.Join("\n", AgentSkill.GetFileList())));
 
-            card.Add(BuildManagerUI.Muted(
+            card.Add(EckText.Muted(
                 "Installing replaces the whole folder, so a file dropped in a later version of the package "
                 + "does not linger. Removing deletes it — but only after checking the folder really is this "
                 + "skill."));
@@ -167,18 +151,14 @@ namespace BuildManagerKit.Editor
             return card;
         }
 
-        private static Label StateBadge(AgentSkillState state)
+        private static EckBadge StateBadge(AgentSkillState state)
         {
             switch (state)
             {
-                case AgentSkillState.UpToDate:
-                    return BuildManagerUI.Badge("Installed", "bmk-badge--success");
-                case AgentSkillState.Outdated:
-                    return BuildManagerUI.Badge("Update available", "bmk-badge--warning");
-                case AgentSkillState.SourceMissing:
-                    return BuildManagerUI.Badge("Package copy missing", "bmk-badge--error");
-                default:
-                    return BuildManagerUI.Badge("Not installed", "bmk-badge--neutral");
+                case AgentSkillState.UpToDate: return new EckBadge("Installed", EckTone.Success);
+                case AgentSkillState.Outdated: return new EckBadge("Update available", EckTone.Warning);
+                case AgentSkillState.SourceMissing: return new EckBadge("Package copy missing", EckTone.Error);
+                default: return new EckBadge("Not installed");
             }
         }
 

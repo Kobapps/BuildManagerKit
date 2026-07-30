@@ -121,6 +121,38 @@ namespace BuildManagerKit.Tests
             Assert.IsFalse(Directory.Exists(m_OutputRoot), "A dry run must not create the output folder.");
         }
 
+        /// <summary>
+        /// The path the "open output folder" commands reveal has to be the path a build writes to.
+        /// A resolver that drifted from the runner would send people to an empty folder and leave
+        /// them convinced the build had not produced anything.
+        /// </summary>
+        [Test]
+        public void ResolveOutputPath_MatchesWhatABuildWouldUse()
+        {
+            var result = Run(dryRun: true);
+
+            Assert.AreEqual(result.outputPath, BuildRunner.ResolveOutputPath(m_Profile, m_Environment));
+            Assert.AreEqual(
+                ProjectPaths.Normalize(Path.GetDirectoryName(result.outputPath)),
+                ProjectPaths.Normalize(BuildRunner.ResolveOutputDirectory(m_Profile, m_Environment)));
+        }
+
+        [Test]
+        public void ResolveOutputPath_CreatesNothing()
+        {
+            BuildRunner.ResolveOutputPath(m_Profile, m_Environment);
+
+            Assert.IsFalse(Directory.Exists(m_OutputRoot),
+                "Resolving a path for the UI must not create the output folder.");
+        }
+
+        [Test]
+        public void ResolveOutputPath_RefusesAMissingProfile()
+        {
+            Assert.Throws<ArgumentNullException>(() => BuildRunner.ResolveOutputPath(null));
+            Assert.Throws<ArgumentNullException>(() => BuildRunner.ResolveOutputDirectory(null));
+        }
+
         [Test]
         public void DryRun_RunsActionsInOrder()
         {

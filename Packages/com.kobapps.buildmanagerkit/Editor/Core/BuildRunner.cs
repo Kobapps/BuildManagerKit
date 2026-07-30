@@ -38,6 +38,17 @@ namespace BuildManagerKit.Editor
         /// <summary>Validate and log everything but do not build or touch the project.</summary>
         public bool DryRun;
 
+        /// <summary>
+        /// Launch the player as soon as it is built — Unity's "Build And Run".
+        ///
+        /// Where it launches is the platform's business: a standalone player starts on this
+        /// machine, an Android or iOS build is deployed to the connected device, and a WebGL build
+        /// opens in a browser. It is a property of this run rather than of the profile, because
+        /// whether you want to watch the build start is a question about right now, not about how
+        /// the platform is configured — and CI must never answer it by accident.
+        /// </summary>
+        public bool RunAfterBuild;
+
         /// <summary>Started from the UI: show progress bars and confirmation dialogs.</summary>
         public bool Interactive;
 
@@ -84,6 +95,49 @@ namespace BuildManagerKit.Editor
 
         /// <summary>Raised when a run finishes, whatever the outcome.</summary>
         public static event Action<BuildRunResult> RunFinished;
+
+        /// <summary>
+        /// Where a build of this pairing would be written, resolved exactly as a real build would
+        /// resolve it — every token, the version, the build number and the platform's own file
+        /// extension.
+        ///
+        /// Nothing is created and nothing about the project is touched, so this is safe to call
+        /// while drawing UI. It is the same resolution the build itself performs, which is the
+        /// point: a path shown in the window that a build then ignores is worse than no path.
+        /// </summary>
+        /// <param name="profile">Profile to resolve. Required.</param>
+        /// <param name="environment">
+        /// Environment to resolve with. Falls back to the profile default, then to the active
+        /// Editor environment — the same fallback <see cref="Run"/> applies.
+        /// </param>
+        /// <returns>The absolute path of the player file or bundle.</returns>
+        /// <exception cref="ArgumentNullException">No profile was given.</exception>
+        public static string ResolveOutputPath(BuildTargetProfile profile, BuildEnvironment environment = null)
+        {
+            if (profile == null)
+                throw new ArgumentNullException(nameof(profile));
+
+            var settings = BuildManagerSettings.Instance;
+            environment ??= profile.DefaultEnvironment ?? settings.ActiveEnvironment;
+
+            return BuildProbeContext(settings, profile, environment).OutputPath;
+        }
+
+        /// <summary>
+        /// The folder <see cref="ResolveOutputPath"/> writes into. This is what "open the output
+        /// folder" means: builds of one profile accumulate here.
+        /// </summary>
+        /// <inheritdoc cref="ResolveOutputPath" path="/param" />
+        public static string ResolveOutputDirectory(BuildTargetProfile profile, BuildEnvironment environment = null)
+        {
+            if (profile == null)
+                throw new ArgumentNullException(nameof(profile));
+
+            var settings = BuildManagerSettings.Instance;
+            environment ??= profile.DefaultEnvironment ?? settings.ActiveEnvironment;
+
+            return BuildProbeContext(settings, profile, environment).OutputDirectory;
+        }
 
         /// <summary>
         /// Validates a request without building anything. Equivalent to a dry run but cheaper:
@@ -702,6 +756,29 @@ namespace BuildManagerKit.Editor
 
             context.EnsureDirectory(context.OutputDirectory);
 
+            var buildOptions = (request.Overrides ?? new BuildOverrides())
+                .Apply(context.Profile.ResolveBuildOptions(context.DevelopmentBuild), context.DevelopmentBuild);
+
+            // Added last, and only from the request: it is the one option that is a property of
+            // this press rather than of the profile, and a profile that could carry it would
+            // eventually launch a player on a build server.
+            if (request.RunAfterBuild)
+            {
+                // Appending to an existing Xcode project produces a project rather than a runnable
+                // player, so Unity refuses the pair. Dropping the launch and saying so beats
+                // failing a build that was otherwise fine — the artifact is still what was wanted.
+                if ((buildOptions & BuildOptions.AcceptExternalModificationsToPlayer) != 0)
+                {
+                    context.Log.Warning(
+                        "Build and Run is not available while 'append project' is on: the build produces an "
+                        + "Xcode project to open, not a player to launch. Building without launching.");
+                }
+                else
+                {
+                    buildOptions |= BuildOptions.AutoRunPlayer;
+                }
+            }
+
             var options = new BuildPlayerOptions
             {
                 scenes = context.Scenes,
@@ -709,14 +786,18 @@ namespace BuildManagerKit.Editor
                 target = context.Target,
                 targetGroup = BuildPipeline.GetBuildTargetGroup(context.Target),
                 subtarget = (int)context.StandaloneSubtarget,
-                options = (request.Overrides ?? new BuildOverrides())
-                    .Apply(context.Profile.ResolveBuildOptions(context.DevelopmentBuild), context.DevelopmentBuild)
+                options = buildOptions
             };
 
             if (request.Interactive)
                 EditorUtility.DisplayProgressBar("Build Manager Kit", "Building player…", 0.5f);
 
             context.Log.Info($"Building {context.Scenes.Length} scene(s)…");
+
+            // Read back off the options rather than off the request, so the log cannot promise a
+            // launch the guard above has already withdrawn.
+            if ((buildOptions & BuildOptions.AutoRunPlayer) != 0)
+                context.Log.Info("The player will be launched as soon as it is built.");
 
             var report = BuildPipeline.BuildPlayer(options);
             context.Report = report;
@@ -837,7 +918,10 @@ namespace BuildManagerKit.Editor
             else
                 context.Log.Write(BuildLogLevel.Error, summaryLine);
 
-            if (request.Interactive && result.Succeeded && settings.RevealOutputOnSuccess && !context.DryRun)
+            // Not when the player was launched: the build is already in front of the user, and a
+            // Finder window opening over it is noise.
+            if (request.Interactive && result.Succeeded && settings.RevealOutputOnSuccess && !context.DryRun
+                && !request.RunAfterBuild)
                 EditorUtility.RevealInFinder(context.OutputPath);
 
             RunFinished?.Invoke(result);

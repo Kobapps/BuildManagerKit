@@ -131,6 +131,7 @@ references to it: queue defaults and overrides, and the profiles that allowed or
 | `-bmkScenes <a;b>` | replace the scene list |
 | `-bmkResultFile <path>` | write the JSON result here |
 | `-bmkDryRun` | validate and log without building |
+| `-bmkRun` | launch the player once it is built (Build And Run) — local use only |
 | `-bmkNoPlatformSwitch` | fail instead of switching the active platform |
 
 Per-run build option overrides — omit to keep the profile's value:

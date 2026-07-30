@@ -1,4 +1,5 @@
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -25,20 +26,16 @@ namespace BuildManagerKit.Editor
             m_Profile ??= Window.SelectedProfile;
             m_Environment ??= Settings.ActiveEnvironment;
 
-            var root = new ScrollView();
-            root.AddToClassList("bmk-scroll");
-
-            root.Add(BuildSelectionCard());
-            root.Add(BuildCommandCard());
-            root.Add(BuildTemplateCard());
-            root.Add(BuildTokenCard());
-
-            return root;
+            return EckLayout.Page(
+                BuildSelectionCard(),
+                BuildCommandCard(),
+                BuildTemplateCard(),
+                BuildTokenCard());
         }
 
         private VisualElement BuildSelectionCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Target",
                 "Pick what the generated command line and pipeline should build.");
 
@@ -61,7 +58,7 @@ namespace BuildManagerKit.Editor
             }
             else
             {
-                card.Add(BuildManagerUI.Muted("Create a build profile first."));
+                card.Add(EckEmptyState.Line("Create a build profile first."));
             }
 
             var environments = Settings.GetSortedEnvironments().ToList();
@@ -100,38 +97,34 @@ namespace BuildManagerKit.Editor
                 + "  -bmkResultFile build-result.json \\\n"
                 + "  -logFile -";
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Command line",
                 "Exit codes: 0 success · 1 build failed · 2 usage error · 3 cancelled. "
                 + "The JSON result carries the status, duration, size, error counts and the full log.");
 
-            var field = new TextField { multiline = true, value = command, isReadOnly = true };
-            field.AddToClassList("bmk-code");
-            card.Add(field);
+            card.Add(EckText.Code(command));
 
-            var row = new VisualElement();
-            row.AddToClassList("bmk-row");
+            var row = EckLayout.Row(
+                EckButton.Secondary("Copy Command", () => EditorGUIUtility.systemCopyBuffer = command),
+                EckButton.Secondary("Copy Arguments Only", () => EditorGUIUtility.systemCopyBuffer =
+                    $"-bmkProfile {profileId} -bmkEnv {environmentId}"));
+
             row.style.marginTop = 6;
-
-            row.Add(new Button(() => EditorGUIUtility.systemCopyBuffer = command) { text = "Copy Command" });
-            row.Add(new Button(() => EditorGUIUtility.systemCopyBuffer =
-                $"-bmkProfile {profileId} -bmkEnv {environmentId}") { text = "Copy Arguments Only" });
-
             card.Add(row);
 
-            card.Add(BuildManagerUI.SectionTitle("Other entry points"));
-            card.Add(BuildManagerUI.KeyValue("Queue", "BuildCLI.BuildQueue  -bmkQueue <id>"));
-            card.Add(BuildManagerUI.KeyValue("Environment", "BuildCLI.SwitchEnvironment  -bmkEnv <id>"));
-            card.Add(BuildManagerUI.KeyValue("Platform", "BuildCLI.SwitchPlatform  -bmkTarget <BuildTarget>"));
-            card.Add(BuildManagerUI.KeyValue("Inventory", "BuildCLI.List"));
-            card.Add(BuildManagerUI.KeyValue("Pull request check", "BuildCLI.ValidateAll"));
+            card.Add(EckText.SectionTitle("Other entry points"));
+            card.Add(EckText.KeyValue("Queue", "BuildCLI.BuildQueue  -bmkQueue <id>"));
+            card.Add(EckText.KeyValue("Environment", "BuildCLI.SwitchEnvironment  -bmkEnv <id>"));
+            card.Add(EckText.KeyValue("Platform", "BuildCLI.SwitchPlatform  -bmkTarget <BuildTarget>"));
+            card.Add(EckText.KeyValue("Inventory", "BuildCLI.List"));
+            card.Add(EckText.KeyValue("Pull request check", "BuildCLI.ValidateAll"));
 
             return card;
         }
 
         private VisualElement BuildTemplateCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Pipeline template",
                 "Generated for this project, wired to the selection above.");
 
@@ -145,52 +138,58 @@ namespace BuildManagerKit.Editor
 
             var content = CiTemplateGenerator.Generate(m_Provider, m_Profile, m_Environment);
 
-            var field = new TextField { multiline = true, value = content, isReadOnly = true };
-            field.AddToClassList("bmk-code");
-            field.style.minHeight = 260;
-            card.Add(field);
+            // A scrolling well rather than a tall block: a Jenkinsfile is longer than the pane, and
+            // a card that grows to fit it pushes everything below off the page. The code class goes
+            // on the well, not on the text inside it, or the frame is drawn twice.
+            var text = new Label(content) { selection = { isSelectable = true } };
+            text.style.whiteSpace = WhiteSpace.Normal;
 
-            var row = new VisualElement();
-            row.AddToClassList("bmk-row");
-            row.style.marginTop = 6;
-
-            row.Add(new Button(() => EditorGUIUtility.systemCopyBuffer = content) { text = "Copy" });
+            var scroll = new ScrollView();
+            scroll.AddToClassList(EckClass.Code);
+            scroll.style.maxHeight = 320;
+            scroll.Add(text);
+            card.Add(scroll);
 
             var fileName = CiTemplateGenerator.GetDefaultFileName(m_Provider);
-            row.Add(BuildManagerUI.PrimaryButton($"Write {fileName}", () =>
-            {
-                var path = CiTemplateGenerator.Write(m_Provider, m_Profile, m_Environment);
 
-                if (path == null)
+            var row = EckLayout.Row(
+                EckButton.Secondary("Copy", () => EditorGUIUtility.systemCopyBuffer = content),
+                EckButton.Primary($"Write {fileName}", () =>
                 {
-                    var overwrite = EditorUtility.DisplayDialog(
-                        "File exists",
-                        $"'{fileName}' already exists. Overwrite it?",
-                        "Overwrite",
-                        "Cancel");
+                    var path = CiTemplateGenerator.Write(m_Provider, m_Profile, m_Environment);
 
-                    if (!overwrite)
-                        return;
+                    if (path == null)
+                    {
+                        var overwrite = EditorUtility.DisplayDialog(
+                            "File exists",
+                            $"'{fileName}' already exists. Overwrite it?",
+                            "Overwrite",
+                            "Cancel");
 
-                    path = CiTemplateGenerator.Write(m_Provider, m_Profile, m_Environment, true);
-                }
+                        if (!overwrite)
+                            return;
 
-                Debug.Log($"[BuildManagerKit] Wrote {path}.");
-                EditorUtility.RevealInFinder(path);
-            }));
+                        path = CiTemplateGenerator.Write(m_Provider, m_Profile, m_Environment, true);
+                    }
 
+                    Debug.Log($"[BuildManagerKit] Wrote {path}.");
+                    EditorUtility.RevealInFinder(path);
+                }));
+
+            row.style.marginTop = 6;
             card.Add(row);
+
             return card;
         }
 
         private VisualElement BuildTokenCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Tokens",
                 "Available in output paths, file names, shell commands, written files and notification messages.");
 
             foreach (var (token, description) in BuildTokens.Documentation)
-                card.Add(BuildManagerUI.KeyValue(token, description));
+                card.Add(EckText.KeyValue(token, description));
 
             return card;
         }

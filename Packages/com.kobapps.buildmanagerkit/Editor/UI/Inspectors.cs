@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
@@ -27,15 +28,19 @@ namespace BuildManagerKit.Editor
 
             var profile = (BuildTargetProfile)target;
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-            header.Add(BuildManagerUI.PrimaryButton("Build", () =>
-                BuildManagerWindow.Open().BuildProfile(profile, BuildManagerSettings.Instance.ActiveEnvironment,
-                    false)));
-            header.Add(new Button(() => BuildManagerWindow.Open("Profiles")) { text = "Open Build Manager" });
-            root.Add(header);
+            root.Add(EckLayout.WrapRow(
+                EckButton.Primary("Build", () =>
+                    BuildManagerWindow.Open().BuildProfile(profile, BuildManagerSettings.Instance.ActiveEnvironment,
+                        false)),
+                EckButton.Secondary("Build and Run", () =>
+                        BuildManagerWindow.Open().BuildProfile(profile,
+                            BuildManagerSettings.Instance.ActiveEnvironment, false, true))
+                    .Tip("Build, then launch the player — on the connected device for a mobile target."),
+                EckButton.Secondary("Open Output Folder",
+                    () => BuildManagerUI.RevealOutputFolder(profile)),
+                EckButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Profiles"))));
 
-            BuildManagerUI.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_PreBuildSteps", BuildStepScope.PreBuild,
                 "Pre build actions", null, BuildStepScopeLevel.Profile));
@@ -67,14 +72,11 @@ namespace BuildManagerKit.Editor
 
             var environment = (BuildEnvironment)target;
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-            header.Add(BuildManagerUI.PrimaryButton("Make Active",
-                () => EnvironmentManager.Activate(environment, true)));
-            header.Add(new Button(() => BuildManagerWindow.Open("Environments")) { text = "Open Build Manager" });
-            root.Add(header);
+            root.Add(EckLayout.Row(
+                EckButton.Primary("Make Active", () => EnvironmentManager.Activate(environment, true)),
+                EckButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Environments"))));
 
-            BuildManagerUI.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_OnActivateSteps", BuildStepScope.EnvironmentActivate,
                 "On activate actions", null, BuildStepScopeLevel.Environment));
@@ -106,9 +108,9 @@ namespace BuildManagerKit.Editor
             var root = new VisualElement();
             BuildManagerUI.ApplyStyles(root);
 
-            root.Add(BuildManagerUI.PrimaryButton("Open Build Manager", () => BuildManagerWindow.Open()));
+            root.Add(EckButton.Primary("Open Build Manager", () => BuildManagerWindow.Open()));
 
-            BuildManagerUI.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_GlobalOnActivateSteps",
                 BuildStepScope.EnvironmentActivate, "Global on activate actions"));
@@ -148,19 +150,19 @@ namespace BuildManagerKit.Editor
                     var settings = BuildManagerSettings.Instance;
                     var serializedObject = new SerializedObject(settings);
 
-                    var open = BuildManagerUI.PrimaryButton("Open Build Manager", () => BuildManagerWindow.Open());
+                    var open = EckButton.Primary("Open Build Manager", () => BuildManagerWindow.Open());
                     open.style.alignSelf = Align.FlexStart;
                     root.Add(open);
 
                     var active = settings.ActiveEnvironment;
-                    root.Add(BuildManagerUI.KeyValue("Active environment",
+                    root.Add(EckText.KeyValue("Active environment",
                         active != null ? active.DisplayName : "none"));
-                    root.Add(BuildManagerUI.KeyValue("Profiles", settings.Profiles.Count.ToString()));
-                    root.Add(BuildManagerUI.KeyValue("Environments", settings.Environments.Count.ToString()));
-                    root.Add(BuildManagerUI.Separator());
+                    root.Add(EckText.KeyValue("Profiles", settings.Profiles.Count.ToString()));
+                    root.Add(EckText.KeyValue("Environments", settings.Environments.Count.ToString()));
+                    root.Add(EckLayout.Separator());
 
                     var hidden = new HashSet<string> { "m_Script" };
-                    BuildManagerUI.DrawChildren(root, serializedObject.GetIterator(), serializedObject, hidden);
+                    EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, hidden);
 
                     root.Bind(serializedObject);
                 }

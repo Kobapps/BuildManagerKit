@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -35,32 +36,31 @@ namespace BuildManagerKit.Editor
         {
             m_Selected ??= Window.SelectedProfile;
 
-            var root = new VisualElement();
-            root.AddToClassList("bmk-split");
+            // The divider position is remembered, so someone who works mostly in the detail pane
+            // does not narrow the catalogue again every time the window is reopened.
+            var split = new EckSplitView(220f, false, "BuildManagerKit.Profiles");
+            split.First.Add(BuildMasterList());
+            split.Second.Add(BuildDetail());
 
-            root.Add(BuildMasterList());
-            root.Add(BuildDetail());
-
-            return root;
+            return split;
         }
 
         private VisualElement BuildMasterList()
         {
+            // The pane owns the width, so the column inside it only has to fill the height it is
+            // given; carrying EckClass.Master here as well would fight the divider.
             var master = new VisualElement();
-            master.AddToClassList("bmk-master");
+            master.style.flexGrow = 1;
+            master.style.minHeight = 0;
+            master.style.marginRight = 6;
 
-            var toolbar = new VisualElement();
-            toolbar.AddToClassList("bmk-toolbar");
-
-            var add = new Button(ShowCreateMenu) { text = "+ New" };
-            var rescan = new Button(() =>
+            var toolbar = new EckToolbar();
+            toolbar.Add(EckDropdownButton.Create(EckIcons.Plus + " New", BuildCreateMenu));
+            toolbar.Add(EckButton.Secondary("Rescan", () =>
             {
                 Settings.DiscoverAssets();
                 Window.RefreshCurrentView();
-            }) { text = "Rescan" };
-
-            toolbar.Add(add);
-            toolbar.Add(rescan);
+            }));
             master.Add(toolbar);
 
             // The catalogue scrolls on its own so a long profile list never stretches the page.
@@ -69,58 +69,33 @@ namespace BuildManagerKit.Editor
             scroll.style.minHeight = 0;
             master.Add(scroll);
 
+            if (Settings.Profiles.Count == 0)
+            {
+                scroll.Add(EckEmptyState.Line("No profiles yet."));
+                return master;
+            }
+
             var list = new VisualElement();
-            list.AddToClassList("bmk-list");
+            list.AddToClassList(EckClass.List);
 
             foreach (var profile in Settings.Profiles.Where(profile => profile != null))
             {
                 var captured = profile;
 
-                var item = new VisualElement();
-                item.AddToClassList("bmk-list-item");
-                if (profile == m_Selected)
-                    item.AddToClassList("bmk-list-item--selected");
+                var row = new EckListRow(profile.DisplayName, () => Select(captured))
+                    .WithIcon(BuildTargetIcons.Get(profile.Target, profile.StandaloneSubtarget))
+                    .WithSublabel(BuildTargetUtility.GetShortName(profile.Target));
 
-                var icon = new Image
-                {
-                    image = BuildTargetIcons.Get(profile.Target, profile.StandaloneSubtarget),
-                    scaleMode = ScaleMode.ScaleToFit
-                };
-                icon.AddToClassList("bmk-pill__icon");
+                row.Selected = profile == m_Selected;
 
-                var label = new Label(profile.DisplayName);
-                label.AddToClassList("bmk-grow");
-                label.style.fontSize = 11;
-                label.style.overflow = Overflow.Hidden;
                 if (!profile.Enabled)
-                    label.style.opacity = 0.5f;
-
-                var target = new Label(BuildTargetUtility.GetShortName(profile.Target));
-                target.AddToClassList("bmk-muted");
-                target.style.flexShrink = 0;
-
-                item.Add(icon);
-                item.Add(label);
-                item.Add(target);
-
-                item.RegisterCallback<MouseDownEvent>(_ =>
-                {
-                    m_Selected = captured;
-                    Window.SelectedProfile = captured;
-                    Window.RefreshCurrentView();
-                });
+                    row.style.opacity = 0.5f;
 
                 // Right-click straight on the row, which is where deleting one of a long list is
                 // actually convenient.
-                item.AddManipulator(new ContextualMenuManipulator(evt =>
+                row.AddManipulator(new ContextualMenuManipulator(evt =>
                 {
-                    evt.menu.AppendAction("Select", _ =>
-                    {
-                        m_Selected = captured;
-                        Window.SelectedProfile = captured;
-                        Window.RefreshCurrentView();
-                    });
-
+                    evt.menu.AppendAction("Select", _ => Select(captured));
                     evt.menu.AppendAction("Ping Asset", _ => EditorGUIUtility.PingObject(captured));
                     evt.menu.AppendSeparator();
                     evt.menu.AppendAction("Delete…", _ =>
@@ -130,25 +105,30 @@ namespace BuildManagerKit.Editor
                     });
                 }));
 
-                list.Add(item);
+                list.Add(row);
             }
-
-            if (Settings.Profiles.Count == 0)
-                list.Add(BuildManagerUI.Muted("No profiles yet."));
 
             scroll.Add(list);
             return master;
         }
 
+        private void Select(BuildTargetProfile profile)
+        {
+            m_Selected = profile;
+            Window.SelectedProfile = profile;
+            Window.RefreshCurrentView();
+        }
+
         private VisualElement BuildDetail()
         {
             var detail = new ScrollView();
-            detail.AddToClassList("bmk-detail");
+            detail.AddToClassList(EckClass.Detail);
 
             if (m_Selected == null)
             {
-                detail.Add(BuildManagerUI.EmptyState(
-                    "Select a profile, or create a starter set for the common platforms.",
+                detail.Add(new EckEmptyState(
+                    "No profile selected",
+                    "Pick one from the catalogue, or create a starter set for the common platforms.",
                     "Create Starter Profiles",
                     () =>
                     {
@@ -161,64 +141,58 @@ namespace BuildManagerKit.Editor
 
             var serializedObject = new SerializedObject(m_Selected);
 
-            var header = BuildManagerUI.Card();
-            var headerRow = new VisualElement();
-            headerRow.AddToClassList("bmk-row");
+            var header = new EckCard(m_Selected.DisplayName);
 
-            var titleIcon = new Image
+            var icon = new Image
             {
                 image = BuildTargetIcons.Get(m_Selected.Target, m_Selected.StandaloneSubtarget),
                 scaleMode = ScaleMode.ScaleToFit
             };
-            titleIcon.AddToClassList("bmk-pill__icon");
-            headerRow.Add(titleIcon);
+            icon.AddToClassList(EckClass.ListItemIcon);
+            header.Header.Insert(0, icon);
 
-            var title = new Label(m_Selected.DisplayName);
-            title.AddToClassList("bmk-card__title");
-            title.style.marginBottom = 0;
-
-            var buildButton = BuildManagerUI.PrimaryButton("Build",
+            var buildButton = EckButton.Primary("Build",
                 () => Window.BuildProfile(m_Selected, Settings.ActiveEnvironment, false));
             buildButton.SetEnabled(!BuildRunner.IsRunning);
 
-            var validate = new Button(() =>
-            {
-                var report = BuildRunner.Validate(m_Selected, Settings.ActiveEnvironment);
-                EditorUtility.DisplayDialog(
-                    $"Validation — {m_Selected.DisplayName}",
-                    report.Issues.Count == 0 ? "No problems found." : report.ToString(),
-                    "OK");
-            }) { text = "Validate" };
+            var runButton = EckButton.Secondary("Build and Run",
+                () => Window.BuildProfile(m_Selected, Settings.ActiveEnvironment, false, true));
+            runButton.SetEnabled(!BuildRunner.IsRunning);
+            runButton.tooltip = "Build, then launch the player — on the connected device for a mobile target.";
 
-            var ping = new Button(() => EditorGUIUtility.PingObject(m_Selected)) { text = "Ping Asset" };
+            header.WithHeaderAction(EckButton.Secondary("Open Output Folder",
+                () => BuildManagerUI.RevealOutputFolder(m_Selected, Settings.ActiveEnvironment)));
 
-            var delete = new Button(DeleteSelected)
-            {
-                text = "Delete",
-                tooltip = "Delete this profile asset and remove it from the settings and from every queue."
-            };
-            delete.AddToClassList("bmk-button-danger");
+            // The rest go behind the ⋮: six buttons across a header is a row nobody reads, and
+            // Build is the only one that has to be visible.
+            header.WithHeaderAction(EckDropdownButton.Overflow(menu => menu
+                .Item("Validate", () =>
+                {
+                    var report = BuildRunner.Validate(m_Selected, Settings.ActiveEnvironment);
+                    EditorUtility.DisplayDialog(
+                        $"Validation — {m_Selected.DisplayName}",
+                        report.Issues.Count == 0 ? "No problems found." : report.ToString(),
+                        "OK");
+                })
+                .Item("Dry Run", () => Window.BuildProfile(m_Selected, Settings.ActiveEnvironment, true))
+                .Separator()
+                .Item("Ping Asset", () => EditorGUIUtility.PingObject(m_Selected))
+                .Separator()
+                .Item("Delete…", DeleteSelected)));
 
-            headerRow.Add(title);
-            headerRow.Add(BuildManagerUI.Spacer());
-            headerRow.Add(validate);
-            headerRow.Add(ping);
-            headerRow.Add(delete);
-            headerRow.Add(buildButton);
-            header.Add(headerRow);
+            header.WithHeaderAction(runButton);
+            header.WithHeaderAction(buildButton);
 
             if (!BuildTargetUtility.IsTargetInstalled(m_Selected.Target))
             {
-                var warning = BuildManagerUI.Muted(
-                    $"⚠ The {m_Selected.Target} platform module is not installed in this Editor.");
-                warning.style.color = new Color(0.82f, 0.60f, 0.13f);
-                header.Add(warning);
+                header.Add(new EckBanner(EckTone.Warning,
+                    $"The {m_Selected.Target} platform module is not installed in this Editor."));
             }
 
             detail.Add(header);
 
-            var settingsCard = BuildManagerUI.Card("Configuration");
-            BuildManagerUI.DrawChildren(settingsCard, serializedObject.GetIterator(), serializedObject,
+            var settingsCard = new EckCard("Configuration");
+            EckProperty.DrawChildren(settingsCard, serializedObject.GetIterator(), serializedObject,
                 k_HiddenFields);
             detail.Add(settingsCard);
 
@@ -226,14 +200,14 @@ namespace BuildManagerKit.Editor
 
             detail.Add(BuildManagerUI.GlobalActionsBanner(Settings, "profile", includeActivate: false));
 
-            var preCard = BuildManagerUI.Card();
+            var preCard = new EckCard();
             preCard.Add(new StepListView(serializedObject, "m_PreBuildSteps", BuildStepScope.PreBuild,
                 "Pre build actions",
                 "Run after the global and environment actions, immediately before the player build.",
                 BuildStepScopeLevel.Profile));
             detail.Add(preCard);
 
-            var postCard = BuildManagerUI.Card();
+            var postCard = new EckCard();
             postCard.Add(new StepListView(serializedObject, "m_PostBuildSteps", BuildStepScope.PostBuild,
                 "Post build actions",
                 "Run immediately after the player build, before the environment and global actions.",
@@ -257,7 +231,7 @@ namespace BuildManagerKit.Editor
             var overrideProperty = serializedObject.FindProperty("m_OverrideVersioning");
             var versioningProperty = serializedObject.FindProperty("m_Versioning");
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Versioning",
                 "Where the version string and the build number of a build of this profile come from. "
                 + "Leave the override off to use the project's common configuration — set that on the base "
@@ -267,7 +241,7 @@ namespace BuildManagerKit.Editor
             toggle.Bind(serializedObject);
             card.Add(toggle);
 
-            var inherited = BuildManagerUI.Muted(string.Empty);
+            var inherited = EckText.Muted(string.Empty);
             inherited.AddToClassList("bmk-inherited__label");
             card.Add(inherited);
 
@@ -338,30 +312,15 @@ namespace BuildManagerKit.Editor
             Window.RefreshCurrentView();
         }
 
-        private void ShowCreateMenu()
+        private void BuildCreateMenu(EckMenu menu)
         {
-            var menu = new GenericMenu();
-
-            foreach (var target in BuildTargetUtility.CommonTargets)
-            {
-                var captured = target;
-                menu.AddItem(new GUIContent(BuildTargetUtility.GetShortName(target)), false, () =>
-                {
-                    m_Selected = BuildManagerBootstrap.CreateProfile(captured);
-                    Window.SelectedProfile = m_Selected;
-                    Window.RefreshCurrentView();
-                });
-            }
-
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Dedicated Server (Linux)"), false, () =>
-            {
-                m_Selected = BuildManagerBootstrap.CreateProfile(BuildTarget.StandaloneLinux64, server: true);
-                Window.SelectedProfile = m_Selected;
-                Window.RefreshCurrentView();
-            });
-
-            menu.ShowAsContext();
+            menu.Items(
+                    BuildTargetUtility.CommonTargets,
+                    BuildTargetUtility.GetShortName,
+                    target => Select(BuildManagerBootstrap.CreateProfile(target)))
+                .Separator()
+                .Item("Dedicated Server (Linux)",
+                    () => Select(BuildManagerBootstrap.CreateProfile(BuildTarget.StandaloneLinux64, server: true)));
         }
     }
 }

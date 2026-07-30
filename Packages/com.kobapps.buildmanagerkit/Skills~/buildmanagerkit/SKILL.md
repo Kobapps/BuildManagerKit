@@ -179,6 +179,9 @@ on build *and* on Editor environment switch, so play mode matches the player.
 Add `-bmkDryRun` to validate and log the whole pipeline without producing a player — use it to
 check your work cheaply before committing to a real build.
 
+`-bmkRun` launches the player when the build finishes. Only use it when the user asked to run the
+build locally: on a build server it leaves a player process holding the agent.
+
 Every profile setting has a per-run override (`-bmkDevelopment`, `-bmkScriptingBackend`,
 `-bmkStripping`, `-bmkAppBundle`, …) so CI never has to dirty a profile asset. See
 [references/cli.md](references/cli.md) for the full list.

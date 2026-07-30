@@ -220,6 +220,38 @@ namespace BuildManagerKit.Editor
             return normalized;
         }
 
+        /// <summary>
+        /// The deepest folder along <paramref name="absolutePath"/> that exists on disk, or null
+        /// when not even the root of it does.
+        ///
+        /// For revealing an output folder: a template resolves to a path several folders deep and
+        /// nothing has been built there yet, so opening the nearest ancestor shows the user where
+        /// the build will land instead of failing — and without creating folders, which is not
+        /// something "show me this" should ever do.
+        /// </summary>
+        public static string NearestExistingDirectory(string absolutePath)
+        {
+            if (string.IsNullOrWhiteSpace(absolutePath))
+                return null;
+
+            for (var candidate = Normalize(absolutePath); !string.IsNullOrEmpty(candidate);)
+            {
+                if (Directory.Exists(candidate))
+                    return candidate;
+
+                var parent = Path.GetDirectoryName(candidate);
+
+                // GetDirectoryName returns null at a filesystem root and the same string for a
+                // path it cannot climb any further, either of which would loop forever.
+                if (string.IsNullOrEmpty(parent) || parent == candidate)
+                    return null;
+
+                candidate = Normalize(parent);
+            }
+
+            return null;
+        }
+
         /// <summary>Creates every folder in <paramref name="path"/> that does not exist yet.</summary>
         public static void EnsureDirectory(string path)
         {

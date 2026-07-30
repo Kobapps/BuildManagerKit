@@ -1,7 +1,7 @@
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
-using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace BuildManagerKit.Editor
@@ -20,21 +20,19 @@ namespace BuildManagerKit.Editor
         /// <inheritdoc />
         internal override VisualElement Build()
         {
-            var root = new ScrollView();
-            root.AddToClassList("bmk-scroll");
+            var page = EckLayout.Page();
 
             var serializedObject = new SerializedObject(Settings);
 
-            var intro = BuildManagerUI.Card(
+            var intro = new EckCard(
                 "Build queues",
                 "A queue builds several profiles back to back. Switching platforms between entries reloads the "
                 + "script domain, so the queue stores its progress and resumes itself — it keeps going unattended, "
                 + "in the Editor and on CI.");
 
-            var toolbar = new VisualElement();
-            toolbar.AddToClassList("bmk-row");
+            var toolbar = new EckToolbar();
 
-            toolbar.Add(new Button(() =>
+            toolbar.Add(EckButton.Secondary(EckIcons.Plus + " New Queue", () =>
             {
                 Settings.QueuesMutable.Add(new BuildQueue
                 {
@@ -43,26 +41,27 @@ namespace BuildManagerKit.Editor
                 });
                 Settings.Save();
                 Window.RefreshCurrentView();
-            }) { text = "+ New Queue" });
+            }));
 
             if (BuildQueueRunner.IsRunning)
             {
-                var cancel = new Button(() =>
+                toolbar.Add(EckButton.Danger("Cancel Running Queue", () =>
                 {
                     BuildQueueRunner.Cancel();
                     Window.RefreshCurrentView();
-                }) { text = "Cancel Running Queue" };
-                cancel.AddToClassList("bmk-button-danger");
-                toolbar.Add(cancel);
+                }));
             }
 
             intro.Add(toolbar);
-            root.Add(intro);
+            page.Add(intro);
 
             if (Settings.Queues.Count == 0)
             {
-                root.Add(BuildManagerUI.EmptyState("No queues configured yet."));
-                return root;
+                page.Add(new EckEmptyState(
+                    "No queues configured yet",
+                    "A queue is an ordered list of profiles built one after another — a release run, in one press."));
+
+                return page;
             }
 
             var queuesProperty = serializedObject.FindProperty("m_Queues");
@@ -73,11 +72,11 @@ namespace BuildManagerKit.Editor
                 if (queue == null)
                     continue;
 
-                root.Add(BuildQueueCard(serializedObject, queuesProperty.GetArrayElementAtIndex(i), queue, i));
+                page.Add(BuildQueueCard(serializedObject, queuesProperty.GetArrayElementAtIndex(i), queue, i));
             }
 
-            root.Bind(serializedObject);
-            return root;
+            page.Bind(serializedObject);
+            return page;
         }
 
         private VisualElement BuildQueueCard(
@@ -86,18 +85,9 @@ namespace BuildManagerKit.Editor
             BuildQueue queue,
             int index)
         {
-            var card = BuildManagerUI.Card();
+            var card = new EckCard(queue.Title, $"{queue.ActiveEntries.Count()} enabled entries");
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-
-            var title = new Label(queue.Title);
-            title.AddToClassList("bmk-card__title");
-            title.style.marginBottom = 0;
-
-            var count = BuildManagerUI.Muted($"  {queue.ActiveEntries.Count()} enabled entries");
-
-            var run = BuildManagerUI.PrimaryButton("Run Queue", () =>
+            var run = EckButton.Primary("Run Queue", () =>
             {
                 if (!EditorUtility.DisplayDialog(
                         "Run queue",
@@ -110,9 +100,10 @@ namespace BuildManagerKit.Editor
                 BuildQueueRunner.Start(queue, Settings.ActiveEnvironment, true);
                 Window.RefreshCurrentView();
             });
+
             run.SetEnabled(!BuildRunner.IsRunning && !BuildQueueRunner.IsRunning && queue.ActiveEntries.Any());
 
-            var remove = new Button(() =>
+            card.WithHeaderAction(EckButton.Danger("Remove", () =>
             {
                 if (!EditorUtility.DisplayDialog("Remove queue", $"Remove '{queue.Title}'?", "Remove", "Cancel"))
                     return;
@@ -120,28 +111,17 @@ namespace BuildManagerKit.Editor
                 Settings.QueuesMutable.RemoveAt(index);
                 Settings.Save();
                 Window.RefreshCurrentView();
-            }) { text = "Remove" };
-            remove.AddToClassList("bmk-button-danger");
+            }));
 
-            header.Add(title);
-            header.Add(count);
-            header.Add(BuildManagerUI.Spacer());
-            header.Add(remove);
-            header.Add(run);
-            card.Add(header);
+            card.WithHeaderAction(run);
 
             if (BuildQueueRunner.IsRunning && BuildQueueRunner.CurrentQueue == queue)
             {
-                var progress = BuildManagerUI.Muted(
-                    $"Running — entry {BuildQueueRunner.CurrentIndex + 1} of {queue.ActiveEntries.Count()}");
-                progress.style.color = new Color(0.82f, 0.60f, 0.13f);
-                card.Add(progress);
+                card.Add(new EckBanner(EckTone.Warning,
+                    $"Running — entry {BuildQueueRunner.CurrentIndex + 1} of {queue.ActiveEntries.Count()}"));
             }
 
-            var body = new VisualElement();
-            BuildManagerUI.DrawChildren(body, property, serializedObject);
-            card.Add(body);
-
+            EckProperty.DrawChildren(card, property, serializedObject);
             return card;
         }
     }

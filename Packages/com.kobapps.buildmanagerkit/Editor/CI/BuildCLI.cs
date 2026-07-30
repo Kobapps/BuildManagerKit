@@ -37,7 +37,11 @@ namespace BuildManagerKit.Editor
         ///
         /// Arguments: <c>-bmkProfile</c> (required), <c>-bmkEnv</c>, <c>-bmkOutput</c>,
         /// <c>-bmkVersion</c>, <c>-bmkBuildNumber</c>, <c>-bmkDefines</c>, <c>-bmkResultFile</c>,
-        /// <c>-bmkDryRun</c>, <c>-bmkNoExit</c>.
+        /// <c>-bmkDryRun</c>, <c>-bmkRun</c>, <c>-bmkNoExit</c>.
+        ///
+        /// <c>-bmkRun</c> launches the player when the build finishes. It exists for a local
+        /// headless run on a developer machine; on a build server it would leave a player process
+        /// behind holding the agent, so leave it off there.
         /// </summary>
         public static void Build()
         {
@@ -95,6 +99,7 @@ namespace BuildManagerKit.Editor
                 BuildNumberOverride = arguments.GetInt("bmkBuildNumber"),
                 ExtraDefines = arguments.GetList("bmkDefines"),
                 DryRun = arguments.GetBool("bmkDryRun"),
+                RunAfterBuild = arguments.GetBool("bmkRun"),
                 ResultFilePath = arguments.GetString("bmkResultFile"),
                 AllowPlatformSwitch = !arguments.GetBool("bmkNoPlatformSwitch"),
                 Overrides = overrides,
@@ -409,6 +414,7 @@ Build Manager Kit — command line
       -bmkScenes       <a;b>    Override the scene list with these paths
       -bmkResultFile   <path>   Write the JSON result here
       -bmkDryRun                Validate and log without building
+      -bmkRun                   Launch the player once it is built (Build And Run)
       -bmkNoPlatformSwitch      Fail instead of switching the active platform
       -bmkNoExit                Do not call EditorApplication.Exit
 

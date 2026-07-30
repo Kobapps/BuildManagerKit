@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -32,11 +33,9 @@ namespace BuildManagerKit.Editor
 
             root.Add(BuildToolbar());
 
-            var split = new VisualElement();
-            split.AddToClassList("bmk-split");
-
-            split.Add(BuildList());
-            split.Add(BuildDetail());
+            var split = new EckSplitView(330f, false, "BuildManagerKit.History");
+            split.First.Add(BuildList());
+            split.Second.Add(BuildDetail());
 
             root.Add(split);
             return root;
@@ -47,17 +46,18 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildToolbar()
         {
-            var toolbar = new VisualElement();
-            toolbar.AddToClassList("bmk-toolbar");
+            var toolbar = new EckToolbar();
 
-            var search = new ToolbarSearchFieldCompat("Filter by profile, environment, version, branch or message");
-            search.style.width = 280;
+            var search = new EckSearchField(
+                "Filter by profile, environment, version, branch or message",
+                value =>
+                {
+                    m_Query = value;
+                    Window.RefreshCurrentView();
+                },
+                280f);
+
             search.SetValueWithoutNotify(m_Query);
-            search.OnValueChanged += value =>
-            {
-                m_Query = value;
-                Window.RefreshCurrentView();
-            };
 
             var statusField = new EnumField("Status", StatusFilterValue.All);
             statusField.style.width = 190;
@@ -71,7 +71,10 @@ namespace BuildManagerKit.Editor
                 Window.RefreshCurrentView();
             });
 
-            var clear = new Button(() =>
+            toolbar.Add(search);
+            toolbar.Add(statusField);
+            toolbar.PushRight();
+            toolbar.Add(EckButton.Danger("Clear History", () =>
             {
                 if (!EditorUtility.DisplayDialog(
                         "Clear history",
@@ -83,13 +86,7 @@ namespace BuildManagerKit.Editor
                 BuildHistory.Clear();
                 m_Selected = null;
                 Window.RefreshCurrentView();
-            }) { text = "Clear History" };
-            clear.AddToClassList("bmk-button-danger");
-
-            toolbar.Add(search);
-            toolbar.Add(statusField);
-            toolbar.Add(BuildManagerUI.Spacer());
-            toolbar.Add(clear);
+            }));
 
             return toolbar;
         }
@@ -97,18 +94,15 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildList()
         {
             var container = new ScrollView();
-            container.style.width = 330;
-            container.style.minWidth = 260;
-            container.style.marginRight = 10;
-            container.style.flexGrow = 0;
-            container.style.flexShrink = 0;
+            container.style.flexGrow = 1;
             container.style.minHeight = 0;
+            container.style.marginRight = 10;
 
             var entries = BuildHistory.Search(m_Query, m_StatusFilter).ToArray();
 
             if (entries.Length == 0)
             {
-                container.Add(BuildManagerUI.Muted(
+                container.Add(EckEmptyState.Line(
                     BuildHistory.Entries.Count == 0
                         ? "No builds recorded yet."
                         : "No runs match the current filter."));
@@ -119,48 +113,27 @@ namespace BuildManagerKit.Editor
             m_Selected ??= entries[0];
 
             var list = new VisualElement();
-            list.AddToClassList("bmk-list");
+            list.AddToClassList(EckClass.List);
 
             foreach (var entry in entries)
             {
                 var captured = entry;
 
-                var item = new VisualElement();
-                item.AddToClassList("bmk-list-item");
-                item.style.height = 38;
-                if (entry == m_Selected)
-                    item.AddToClassList("bmk-list-item--selected");
+                var row = new EckListRow(
+                        $"{entry.result.profileName} · {entry.result.environmentId}",
+                        () =>
+                        {
+                            m_Selected = captured;
+                            Window.RefreshCurrentView();
+                        })
+                    .WithDot(BuildManagerUI.ToneOf(entry.result.status), entry.result.status.ToString())
+                    .WithSublabel(
+                        $"{entry.result.version}+{entry.result.buildNumber} · "
+                        + $"{entry.FinishedAt:yyyy-MM-dd HH:mm} · "
+                        + BuildTargetUtility.FormatDuration(TimeSpan.FromSeconds(entry.result.durationSeconds)));
 
-                var dot = new VisualElement();
-                dot.AddToClassList("bmk-pill__dot");
-                dot.style.backgroundColor = StatusColor(entry.result.status);
-
-                var text = new VisualElement();
-                text.AddToClassList("bmk-grow");
-
-                var line1 = new Label($"{entry.result.profileName} · {entry.result.environmentId}");
-                line1.style.fontSize = 11;
-
-                var line2 = new Label(
-                    $"{entry.result.version}+{entry.result.buildNumber} · "
-                    + $"{entry.FinishedAt:yyyy-MM-dd HH:mm} · "
-                    + BuildTargetUtility.FormatDuration(TimeSpan.FromSeconds(entry.result.durationSeconds)));
-                line2.AddToClassList("bmk-muted");
-                line2.style.fontSize = 10;
-
-                text.Add(line1);
-                text.Add(line2);
-
-                item.Add(dot);
-                item.Add(text);
-
-                item.RegisterCallback<MouseDownEvent>(_ =>
-                {
-                    m_Selected = captured;
-                    Window.RefreshCurrentView();
-                });
-
-                list.Add(item);
+                row.Selected = entry == m_Selected;
+                list.Add(row);
             }
 
             container.Add(list);
@@ -171,104 +144,80 @@ namespace BuildManagerKit.Editor
         {
             // A ScrollView: the metadata card plus a full build log easily exceeds the window.
             var detail = new ScrollView();
-            detail.AddToClassList("bmk-detail");
+            detail.AddToClassList(EckClass.Detail);
 
             if (m_Selected == null)
             {
-                detail.Add(BuildManagerUI.Muted("Select a run to inspect its log."));
+                detail.Add(EckEmptyState.Line("Select a run to inspect its log."));
                 return detail;
             }
 
             var result = m_Selected.result;
-            var card = BuildManagerUI.Card();
+            var card = new EckCard($"{result.profileName} · {result.target}");
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-            header.Add(BuildManagerUI.StatusBadge(result.status));
-
-            var title = new Label($"{result.profileName} · {result.target}");
-            title.AddToClassList("bmk-card__title");
-            title.style.marginBottom = 0;
-            header.Add(title);
-            header.Add(BuildManagerUI.Spacer());
+            card.Header.Insert(0, BuildManagerUI.StatusBadge(result.status));
 
             if (!string.IsNullOrEmpty(result.outputPath))
             {
-                header.Add(new Button(() => EditorUtility.RevealInFinder(result.outputPath))
-                {
-                    text = "Reveal Output"
-                });
+                card.WithHeaderAction(EckButton.Secondary("Reveal Output",
+                    () => EditorUtility.RevealInFinder(result.outputPath)));
             }
 
-            header.Add(new Button(() => EditorGUIUtility.systemCopyBuffer = result.ToJson())
-            {
-                text = "Copy JSON"
-            });
+            card.WithHeaderAction(EckButton.Secondary("Copy JSON",
+                () => EditorGUIUtility.systemCopyBuffer = result.ToJson()));
 
-            card.Add(header);
-
-            card.Add(BuildManagerUI.KeyValue("Environment", result.environmentId));
-            card.Add(BuildManagerUI.KeyValue("Version", $"{result.version}+{result.buildNumber}"));
-            card.Add(BuildManagerUI.KeyValue("Duration",
+            card.Add(EckText.KeyValue("Environment", result.environmentId));
+            card.Add(EckText.KeyValue("Version", $"{result.version}+{result.buildNumber}"));
+            card.Add(EckText.KeyValue("Duration",
                 BuildTargetUtility.FormatDuration(TimeSpan.FromSeconds(result.durationSeconds))));
-            card.Add(BuildManagerUI.KeyValue("Size", BuildTargetUtility.FormatSize(result.outputSizeBytes)));
-            card.Add(BuildManagerUI.KeyValue("Errors / warnings", $"{result.errors} / {result.warnings}"));
-            card.Add(BuildManagerUI.KeyValue("Git",
+            card.Add(EckText.KeyValue("Size", BuildTargetUtility.FormatSize(result.outputSizeBytes)));
+            card.Add(EckText.KeyValue("Errors / warnings", $"{result.errors} / {result.warnings}"));
+            card.Add(EckText.KeyValue("Git",
                 string.IsNullOrEmpty(result.gitCommit) ? "—" : $"{result.gitBranch}@{result.gitCommit}"));
-            card.Add(BuildManagerUI.KeyValue("Output", result.outputPath));
+            card.Add(EckText.KeyValue("Output", result.outputPath));
 
             if (!string.IsNullOrEmpty(result.message))
-                card.Add(BuildManagerUI.KeyValue("Message", result.message,
-                    result.Succeeded ? (Color?)null : new Color(0.97f, 0.32f, 0.29f)));
+            {
+                card.Add(EckText.KeyValue("Message", result.message,
+                    result.Succeeded ? (Color?)null : EckTheme.Error));
+            }
 
             if (result.artifacts is { Length: > 0 })
             {
-                card.Add(BuildManagerUI.SectionTitle("Artifacts"));
+                card.Add(EckText.SectionTitle("Artifacts"));
+
+                var artifacts = new VisualElement();
+                artifacts.AddToClassList(EckClass.List);
+
                 foreach (var artifact in result.artifacts)
                 {
-                    var row = new VisualElement();
-                    row.AddToClassList("bmk-row");
-
-                    var label = new Label(artifact);
-                    label.AddToClassList("bmk-grow");
-                    label.style.fontSize = 10;
-
-                    var reveal = new Button(() => EditorUtility.RevealInFinder(artifact)) { text = "Reveal" };
-                    reveal.style.height = 16;
-
-                    row.Add(label);
-                    row.Add(reveal);
-                    card.Add(row);
+                    var captured = artifact;
+                    artifacts.Add(new EckListRow(artifact)
+                        .WithAction(EckButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(captured))));
                 }
+
+                card.Add(artifacts);
             }
 
             detail.Add(card);
 
-            var logCard = BuildManagerUI.Card("Log");
-            var console = new BuildConsole();
-            console.style.minHeight = 220;
-
+            var logCard = new EckCard("Log");
             var text = m_Selected.HasLog ? BuildHistory.ReadLog(m_Selected) : result.log;
+
             if (string.IsNullOrEmpty(text))
-                logCard.Add(BuildManagerUI.Muted("No log was stored for this run."));
-            else
-                console.SetPlainText(text);
-
-            logCard.Add(console);
-            detail.Add(logCard);
-
-            return detail;
-        }
-
-        private static Color StatusColor(BuildRunStatus status)
-        {
-            switch (status)
             {
-                case BuildRunStatus.Succeeded: return new Color(0.25f, 0.73f, 0.31f);
-                case BuildRunStatus.Failed: return new Color(0.97f, 0.32f, 0.29f);
-                case BuildRunStatus.Cancelled: return new Color(0.82f, 0.60f, 0.13f);
-                default: return Color.gray;
+                logCard.Add(EckEmptyState.Line("No log was stored for this run."));
             }
+            else
+            {
+                var console = new EckLogConsole();
+                console.style.minHeight = 220;
+                console.SetPlainText(text);
+                logCard.Add(console);
+            }
+
+            detail.Add(logCard);
+            return detail;
         }
 
         /// <summary>Status filter values, mirroring <see cref="BuildRunStatus"/> plus "all".</summary>

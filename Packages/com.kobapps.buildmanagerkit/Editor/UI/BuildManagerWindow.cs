@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -41,6 +42,10 @@ namespace BuildManagerKit.Editor
     /// <summary>
     /// The Build Manager window: one place to configure profiles, environments, queues and CI, to
     /// launch builds, and to watch them run.
+    ///
+    /// The furniture — header, sidebar, content and status bar — is EditorCoreKit's window shell,
+    /// so the window follows whichever theme and density the user chose for their editor tooling
+    /// and only the build-specific controls are built here.
     /// </summary>
     public sealed class BuildManagerWindow : EditorWindow
     {
@@ -48,11 +53,7 @@ namespace BuildManagerKit.Editor
         private const string k_SelectedTabKey = "BuildManagerKit.SelectedTab";
 
         private readonly List<BuildManagerView> m_Views = new List<BuildManagerView>();
-        private VisualElement m_Sidebar;
-        private VisualElement m_Content;
-        private VisualElement m_HeaderControls;
-        private Label m_StatusLabel;
-        private VisualElement m_StatusBadge;
+        private EckWindowShell m_Shell;
         private int m_SelectedIndex;
 
         /// <summary>The profile the header Build button acts on.</summary>
@@ -97,7 +98,6 @@ namespace BuildManagerKit.Editor
         private void CreateGUI()
         {
             BuildManagerUI.ApplyStyles(rootVisualElement);
-            rootVisualElement.AddToClassList("bmk-root");
 
             BuildManagerSettings.Instance.DiscoverAssets();
 
@@ -113,21 +113,17 @@ namespace BuildManagerKit.Editor
             foreach (var view in m_Views)
                 view.Attach(this);
 
-            rootVisualElement.Add(BuildHeader());
+            m_Shell = new EckWindowShell("Build Manager Kit", "v" + AgentSkill.PackageVersion)
+                .MountInto(rootVisualElement);
 
-            var body = new VisualElement();
-            body.AddToClassList("bmk-body");
+            m_Shell.Status.Add(EckButton.Secondary("Builds", RevealOutputFolder)
+                .Tip("Open the folder builds of the selected profile are written to."));
 
-            m_Sidebar = new VisualElement();
-            m_Sidebar.AddToClassList("bmk-sidebar");
+            m_Shell.Status.Add(EckButton.Secondary("Logs", RevealLogFolder)
+                .Tip("Open the folder containing the text log of every build."));
 
-            m_Content = new VisualElement();
-            m_Content.AddToClassList("bmk-content");
-
-            body.Add(m_Sidebar);
-            body.Add(m_Content);
-            rootVisualElement.Add(body);
-            rootVisualElement.Add(BuildStatusBar());
+            m_Shell.Status.Set("Idle");
+            RefreshHeader();
 
             m_SelectedIndex = Mathf.Clamp(EditorPrefs.GetInt(k_SelectedTabKey, 0), 0, m_Views.Count - 1);
             RebuildSidebar();
@@ -158,35 +154,11 @@ namespace BuildManagerKit.Editor
         /// <summary>Rebuilds the header pills and the sidebar badges.</summary>
         internal void RefreshHeader()
         {
-            if (m_HeaderControls == null)
+            if (m_Shell == null)
                 return;
 
-            m_HeaderControls.Clear();
-            PopulateHeaderControls(m_HeaderControls);
+            m_Shell.Header.Rebuild(PopulateHeaderControls);
             RefreshSidebarBadges();
-        }
-
-        private VisualElement BuildHeader()
-        {
-            var header = new VisualElement();
-            header.AddToClassList("bmk-header");
-
-            var title = new Label("Build Manager Kit");
-            title.AddToClassList("bmk-header__title");
-
-            var version = new Label("v1.0.0");
-            version.AddToClassList("bmk-header__version");
-
-            header.Add(title);
-            header.Add(version);
-            header.Add(BuildManagerUI.Spacer());
-
-            m_HeaderControls = new VisualElement();
-            m_HeaderControls.AddToClassList("bmk-header__controls");
-            PopulateHeaderControls(m_HeaderControls);
-            header.Add(m_HeaderControls);
-
-            return header;
         }
 
         private void PopulateHeaderControls(VisualElement container)
@@ -194,7 +166,7 @@ namespace BuildManagerKit.Editor
             var settings = BuildManagerSettings.Instance;
             var environment = settings.ActiveEnvironment;
 
-            container.Add(BuildManagerUI.Pill(
+            container.Add(new EckPill(
                 environment != null ? environment.DisplayName : "No environment",
                 environment != null ? environment.Color : Color.gray,
                 ShowEnvironmentMenu,
@@ -203,7 +175,7 @@ namespace BuildManagerKit.Editor
             var activeTarget = EditorUserBuildSettings.activeBuildTarget;
             var activeSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
 
-            container.Add(BuildManagerUI.Pill(
+            container.Add(new EckPill(
                 BuildTargetUtility.GetShortName(activeTarget),
                 BuildTargetIcons.Get(activeTarget, activeSubtarget),
                 ShowPlatformMenu,
@@ -211,9 +183,7 @@ namespace BuildManagerKit.Editor
                 + "Switching preserves each platform's own settings."));
 
             // Separates "what am I looking at" from "what will I build".
-            var divider = new VisualElement();
-            divider.AddToClassList("bmk-divider");
-            container.Add(divider);
+            container.Add(EckLayout.VerticalSeparator());
 
             var profile = SelectedProfile;
 
@@ -229,87 +199,38 @@ namespace BuildManagerKit.Editor
                     : "No build profile yet. Use the ▼ menu to create one.",
                 !BuildRunner.IsRunning));
 
-            var overflow = new Button { text = "⋯", tooltip = "More actions" };
-            overflow.AddToClassList("bmk-icon-button");
-            overflow.clicked += () => ShowOverflowMenu(overflow.worldBound);
-            container.Add(overflow);
-        }
-
-        private VisualElement BuildStatusBar()
-        {
-            var bar = new VisualElement();
-            bar.AddToClassList("bmk-status");
-
-            m_StatusBadge = new VisualElement();
-            m_StatusBadge.AddToClassList("bmk-row");
-            m_StatusBadge.style.flexShrink = 0;
-
-            m_StatusLabel = new Label("Idle");
-            m_StatusLabel.AddToClassList("bmk-status__label");
-            m_StatusLabel.style.flexGrow = 1;
-
-            bar.Add(m_StatusBadge);
-            bar.Add(m_StatusLabel);
-
-            var openLogs = new Button(() =>
-            {
-                var folder = ProjectPaths.MakeAbsolute(BuildManagerSettings.Instance.LogFolder);
-                System.IO.Directory.CreateDirectory(folder);
-                EditorUtility.RevealInFinder(folder);
-            })
-            {
-                text = "Logs",
-                tooltip = "Open the folder containing the text log of every build."
-            };
-
-            bar.Add(openLogs);
-            return bar;
+            container.Add(EckDropdownButton.Overflow(BuildOverflowMenu));
         }
 
         private void RebuildSidebar()
         {
-            m_Sidebar.Clear();
+            if (m_Shell == null)
+                return;
+
+            m_Shell.Sidebar.Reset();
 
             for (var i = 0; i < m_Views.Count; i++)
             {
                 var index = i;
                 var view = m_Views[i];
-
-                var item = new VisualElement();
-                item.AddToClassList("bmk-nav");
-                if (i == m_SelectedIndex)
-                    item.AddToClassList("bmk-nav--selected");
-
-                var label = new Label(view.Title);
-                label.AddToClassList("bmk-nav__label");
-                item.Add(label);
-
-                var badge = view.Badge;
-                if (!string.IsNullOrEmpty(badge))
-                {
-                    var badgeLabel = new Label(badge);
-                    badgeLabel.AddToClassList("bmk-nav__badge");
-                    item.Add(badgeLabel);
-                }
-
-                item.RegisterCallback<MouseDownEvent>(_ => Select(index));
-                m_Sidebar.Add(item);
+                m_Shell.Sidebar.Add(view.Title, () => Select(index), view.Badge);
             }
 
-            m_Sidebar.Add(BuildManagerUI.Separator());
-            m_Sidebar.Add(BuildManagerUI.Muted(
-                "Tip: ⌘⇧K opens this window, and the Scene view overlay switches environments without leaving the scene."));
+            m_Shell.Sidebar.SelectedIndex = m_SelectedIndex;
+            m_Shell.Sidebar.AddSeparator();
+            m_Shell.Sidebar.AddFootnote(
+                "Tip: ⌘⇧K opens this window, and the Scene view overlay switches environments without leaving the scene.");
         }
 
         private void RefreshSidebarBadges()
         {
-            if (m_Sidebar != null)
+            if (m_Shell != null)
                 RebuildSidebar();
         }
 
         private void Select(int index)
         {
-            if (m_Views.Count == 0)
+            if (m_Views.Count == 0 || m_Shell == null)
                 return;
 
             m_SelectedIndex = Mathf.Clamp(index, 0, m_Views.Count - 1);
@@ -317,50 +238,39 @@ namespace BuildManagerKit.Editor
 
             RebuildSidebar();
 
-            m_Content.Clear();
-
-            try
-            {
-                m_Content.Add(m_Views[m_SelectedIndex].Build());
-            }
-            catch (Exception exception)
-            {
-                m_Content.Add(BuildManagerUI.Muted("This tab failed to draw: " + exception));
-                Debug.LogException(exception);
-            }
+            // The factory overload logs the exception and shows it in the pane, so a tab that
+            // throws while building says so instead of leaving the window blank.
+            m_Shell.SetContent(m_Views[m_SelectedIndex].Build);
         }
 
         private void ShowEnvironmentMenu(Rect anchor)
         {
             var settings = BuildManagerSettings.Instance;
-            var menu = new GenericMenu();
             var active = settings.ActiveEnvironment;
 
-            foreach (var environment in settings.GetSortedEnvironments())
-            {
-                var captured = environment;
-                menu.AddItem(new GUIContent(environment.DisplayName), environment == active,
-                    () =>
+            var menu = EckMenu.New()
+                .Items(
+                    settings.GetSortedEnvironments(),
+                    environment => environment.DisplayName,
+                    environment =>
                     {
-                        EnvironmentManager.Activate(captured, true);
+                        EnvironmentManager.Activate(environment, true);
                         RefreshHeader();
                         RefreshCurrentView();
-                    });
-            }
+                    },
+                    environment => environment == active);
 
             if (settings.Environments.Count == 0)
-                menu.AddDisabledItem(new GUIContent("No environments configured"));
+                menu.Disabled("No environments configured");
 
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Clear Environment"), active == null,
-                () =>
+            menu.Separator()
+                .Item("Clear Environment", () =>
                 {
                     EnvironmentManager.Activate(null, true);
                     RefreshHeader();
-                });
-            menu.AddItem(new GUIContent("Manage Environments…"), false, () => Open("Environments"));
-
-            BuildManagerUI.ShowMenu(menu, anchor);
+                }, active == null)
+                .Item("Manage Environments…", () => Open("Environments"))
+                .ShowUnder(anchor);
         }
 
         private void ShowPlatformMenu(Rect anchor)
@@ -399,7 +309,9 @@ namespace BuildManagerKit.Editor
             menu.AddItem(new GUIContent("Forget Saved Platform Settings"), false,
                 PlatformSwitcher.ClearStoredSettings);
 
-            BuildManagerUI.ShowMenu(menu, anchor);
+            // Built as a GenericMenu rather than through EckMenu: the entries carry platform icons,
+            // which only GUIContent can express.
+            EckMenu.ShowUnder(menu, anchor);
         }
 
         /// <summary>
@@ -454,44 +366,52 @@ namespace BuildManagerKit.Editor
 
             if (selected != null && !busy)
             {
+                menu.AddItem(new GUIContent($"Build and Run {selected.DisplayName}"), false,
+                    () => BuildSelected(false, true));
                 menu.AddItem(new GUIContent($"Dry Run {selected.DisplayName}"), false, () => BuildSelected(true));
                 menu.AddItem(new GUIContent($"Validate {selected.DisplayName}"), false, ValidateSelected);
             }
             else
             {
+                menu.AddDisabledItem(new GUIContent("Build and Run"));
                 menu.AddDisabledItem(new GUIContent("Dry Run"));
                 menu.AddDisabledItem(new GUIContent("Validate"));
             }
 
             menu.AddSeparator(string.Empty);
+
+            if (selected != null)
+                menu.AddItem(new GUIContent("Open Output Folder"), false, RevealOutputFolder);
+            else
+                menu.AddDisabledItem(new GUIContent("Open Output Folder"));
+
             menu.AddItem(new GUIContent("Manage Profiles…"), false, () => Open("Profiles"));
 
-            BuildManagerUI.ShowMenu(menu, anchor);
+            EckMenu.ShowUnder(menu, anchor);
         }
 
-        private void ShowOverflowMenu(Rect anchor)
-        {
-            var menu = new GenericMenu();
-
-            menu.AddItem(new GUIContent("Dry Run"), false, () => BuildSelected(true));
-            menu.AddItem(new GUIContent("Validate Selected Profile"), false, ValidateSelected);
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Select Settings Asset"), false,
-                () => Selection.activeObject = BuildManagerSettings.Instance);
-            menu.AddItem(new GUIContent("Rescan Project For Assets"), false, () =>
-            {
-                var added = BuildManagerSettings.Instance.DiscoverAssets();
-                Debug.Log($"[BuildManagerKit] Registered {added} new asset(s).");
-                RefreshCurrentView();
-            });
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Delete Generated BuildInfo Asset"), false, BuildInfoWriter.Delete);
-
-            BuildManagerUI.ShowMenu(menu, anchor);
-        }
+        private void BuildOverflowMenu(EckMenu menu) =>
+            menu.Item("Build and Run", () => BuildSelected(false, true), !BuildRunner.IsRunning, false)
+                .Item("Dry Run", () => BuildSelected(true))
+                .Item("Validate Selected Profile", ValidateSelected)
+                .Separator()
+                .Item("Open Output Folder", RevealOutputFolder)
+                .Item("Open Build Log Folder", RevealLogFolder)
+                .Separator()
+                .Item("Select Settings Asset", () => Selection.activeObject = BuildManagerSettings.Instance)
+                .Item("Rescan Project For Assets", () =>
+                {
+                    var added = BuildManagerSettings.Instance.DiscoverAssets();
+                    Debug.Log($"[BuildManagerKit] Registered {added} new asset(s).");
+                    RefreshCurrentView();
+                })
+                .Separator()
+                .Item("Delete Generated BuildInfo Asset", BuildInfoWriter.Delete);
 
         /// <summary>Builds <see cref="SelectedProfile"/> with the active environment.</summary>
-        internal void BuildSelected(bool dryRun)
+        /// <param name="dryRun">Validate and log everything without writing a player.</param>
+        /// <param name="runAfterBuild">Launch the player once it is built.</param>
+        internal void BuildSelected(bool dryRun, bool runAfterBuild = false)
         {
             var profile = SelectedProfile;
             if (profile == null)
@@ -500,11 +420,22 @@ namespace BuildManagerKit.Editor
                 return;
             }
 
-            BuildProfile(profile, BuildManagerSettings.Instance.ActiveEnvironment, dryRun);
+            BuildProfile(profile, BuildManagerSettings.Instance.ActiveEnvironment, dryRun, runAfterBuild);
         }
 
         /// <summary>Builds a profile from the UI, honouring the confirmation settings.</summary>
-        internal void BuildProfile(BuildTargetProfile profile, BuildEnvironment environment, bool dryRun)
+        /// <param name="profile">Profile to build.</param>
+        /// <param name="environment">Environment to build with, or null for the usual fallback.</param>
+        /// <param name="dryRun">Validate and log everything without writing a player.</param>
+        /// <param name="runAfterBuild">
+        /// Launch the player once it is built — on this machine for a standalone target, on the
+        /// connected device for Android and iOS, in a browser for WebGL.
+        /// </param>
+        internal void BuildProfile(
+            BuildTargetProfile profile,
+            BuildEnvironment environment,
+            bool dryRun,
+            bool runAfterBuild = false)
         {
             var settings = BuildManagerSettings.Instance;
             environment ??= profile.DefaultEnvironment ?? settings.ActiveEnvironment;
@@ -513,11 +444,14 @@ namespace BuildManagerKit.Editor
                                     (settings.ConfirmBeforeBuilding ||
                                      (environment != null && environment.RequireConfirmation));
 
+            // The dialog says so when a player is about to be launched: on a protected environment
+            // "build" and "build, then run it on the device in my hand" are different answers.
             if (needsConfirmation && !EditorUtility.DisplayDialog(
-                    "Build",
+                    runAfterBuild ? "Build and Run" : "Build",
                     $"Build '{profile.DisplayName}' for {profile.Target}"
-                    + (environment != null ? $" using the '{environment.DisplayName}' environment?" : "?"),
-                    "Build",
+                    + (environment != null ? $" using the '{environment.DisplayName}' environment" : string.Empty)
+                    + (runAfterBuild ? ", then launch it?" : "?"),
+                    runAfterBuild ? "Build and Run" : "Build",
                     "Cancel"))
                 return;
 
@@ -529,9 +463,26 @@ namespace BuildManagerKit.Editor
                     Profile = profile,
                     Environment = environment,
                     DryRun = dryRun,
+                    RunAfterBuild = runAfterBuild,
                     Interactive = true
                 });
             };
+        }
+
+        /// <summary>Opens the folder builds of the selected profile land in.</summary>
+        internal void RevealOutputFolder() =>
+            BuildManagerUI.RevealOutputFolder(SelectedProfile, BuildManagerSettings.Instance.ActiveEnvironment);
+
+        /// <summary>
+        /// Opens the build log folder, creating it first. Unlike the output folder this one is
+        /// ours to make: it is a fixed setting rather than a resolved template, and an empty log
+        /// folder is a truthful answer to "where do the logs go".
+        /// </summary>
+        private static void RevealLogFolder()
+        {
+            var folder = ProjectPaths.MakeAbsolute(BuildManagerSettings.Instance.LogFolder);
+            ProjectPaths.EnsureDirectory(folder);
+            EditorUtility.RevealInFinder(folder);
         }
 
         private void ValidateSelected()
@@ -554,13 +505,12 @@ namespace BuildManagerKit.Editor
             foreach (var view in m_Views)
                 view.OnBuildLog(entry);
 
-            if (m_StatusLabel != null)
-                m_StatusLabel.text = entry.message;
+            m_Shell?.Status.Set(entry.message, BuildManagerUI.ToneOf(entry.level));
         }
 
         private void HandleRunStarted(BuildContext context)
         {
-            SetStatus($"Building {context.Profile.DisplayName}…", "warning", "RUNNING");
+            m_Shell?.Status.Set($"Building {context.Profile.DisplayName}…", "RUNNING", EckTone.Warning);
 
             foreach (var view in m_Views)
                 view.OnBuildStateChanged();
@@ -570,8 +520,10 @@ namespace BuildManagerKit.Editor
 
         private void HandleRunFinished(BuildRunResult result)
         {
-            SetStatus(result.ToSummaryLine(), result.Succeeded ? "success" : "error",
-                result.Succeeded ? "SUCCESS" : "FAILED");
+            m_Shell?.Status.Set(
+                result.ToSummaryLine(),
+                result.Succeeded ? "SUCCESS" : "FAILED",
+                result.Succeeded ? EckTone.Success : EckTone.Error);
 
             foreach (var view in m_Views)
                 view.OnBuildStateChanged();
@@ -581,17 +533,5 @@ namespace BuildManagerKit.Editor
         }
 
         private void HandleEnvironmentChanged(BuildEnvironment environment) => RefreshHeader();
-
-        private void SetStatus(string message, string modifier, string badge)
-        {
-            if (m_StatusBadge == null)
-                return;
-
-            m_StatusBadge.Clear();
-            m_StatusBadge.Add(BuildManagerUI.Badge(badge, modifier));
-
-            if (m_StatusLabel != null)
-                m_StatusLabel.text = message;
-        }
     }
 }

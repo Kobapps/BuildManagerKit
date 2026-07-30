@@ -151,6 +151,44 @@ namespace BuildManagerKit.Tests
             Assert.Less(ProjectPaths.MaxRecommendedPathLength, ProjectPaths.MaxPathLength);
             Assert.Less(ProjectPaths.MaxPathLength, 260, "Must stay under the Windows MAX_PATH limit.");
         }
+
+        [Test]
+        public void NearestExistingDirectory_ReturnsThePathItselfWhenItExists()
+        {
+            Assert.AreEqual(ProjectPaths.Normalize(Root), ProjectPaths.NearestExistingDirectory(Root));
+        }
+
+        /// <summary>
+        /// The case the "open output folder" command exists for: a template that resolves several
+        /// folders deep into somewhere nothing has been built yet.
+        /// </summary>
+        [Test]
+        public void NearestExistingDirectory_ClimbsToTheDeepestFolderThatExists()
+        {
+            var missing = Path.Combine(Root, "Temp", "bmk-no-such-build", "Android", "prod");
+
+            Assert.AreEqual(
+                ProjectPaths.Normalize(Path.Combine(Root, "Temp")),
+                ProjectPaths.NearestExistingDirectory(missing));
+        }
+
+        [Test]
+        public void NearestExistingDirectory_CreatesNothing()
+        {
+            var missing = Path.Combine(Root, "Temp", "bmk-no-such-build", "Android");
+
+            ProjectPaths.NearestExistingDirectory(missing);
+
+            Assert.IsFalse(Directory.Exists(missing), "Revealing a folder must never create one.");
+        }
+
+        [Test]
+        public void NearestExistingDirectory_HandlesNothingUsableWithoutLooping()
+        {
+            Assert.IsNull(ProjectPaths.NearestExistingDirectory(null));
+            Assert.IsNull(ProjectPaths.NearestExistingDirectory(string.Empty));
+            Assert.IsNull(ProjectPaths.NearestExistingDirectory("   "));
+        }
     }
 
     /// <summary>

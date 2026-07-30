@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -31,62 +32,62 @@ namespace BuildManagerKit.Editor
         /// <inheritdoc />
         internal override VisualElement Build()
         {
-            var root = new ScrollView();
-            root.AddToClassList("bmk-scroll");
+            var page = EckLayout.Page();
 
             var serializedObject = new SerializedObject(Settings);
 
-            root.Add(BuildCommonConfigurationCard());
+            page.Add(BuildCommonConfigurationCard());
 
-            var behaviour = BuildManagerUI.Card(
+            var behaviour = new EckCard(
                 "Behaviour",
                 "Stored in the settings asset and shared by the Editor and CI.");
-            BuildManagerUI.DrawChildren(behaviour, serializedObject.GetIterator(), serializedObject, k_HiddenFields);
+            EckProperty.DrawChildren(behaviour, serializedObject.GetIterator(), serializedObject, k_HiddenFields);
 
-            var assetRow = new VisualElement();
-            assetRow.AddToClassList("bmk-row");
+            var assetRow = EckLayout.Row(
+                EckButton.Secondary("Ping Settings Asset", () => EditorGUIUtility.PingObject(Settings)),
+                EckButton.Secondary("Rescan Project", () =>
+                {
+                    var added = Settings.DiscoverAssets();
+                    Debug.Log($"[BuildManagerKit] Registered {added} new asset(s).");
+                    Window.RefreshCurrentView();
+                }));
+
             assetRow.style.marginTop = 6;
-            assetRow.Add(new Button(() => EditorGUIUtility.PingObject(Settings)) { text = "Ping Settings Asset" });
-            assetRow.Add(new Button(() =>
-            {
-                var added = Settings.DiscoverAssets();
-                Debug.Log($"[BuildManagerKit] Registered {added} new asset(s).");
-                Window.RefreshCurrentView();
-            }) { text = "Rescan Project" });
             behaviour.Add(assetRow);
 
-            root.Add(behaviour);
+            page.Add(behaviour);
 
-            root.Add(BuildManagerUI.Card(
+            page.Add(new EckCard(
                 "Global actions",
                 "These three lists run for every environment and every profile in the project. Put shared "
                 + "work here once rather than repeating it on each environment or profile asset."));
 
-            var activateCard = BuildManagerUI.Card();
+            var activateCard = new EckCard();
             activateCard.Add(new StepListView(serializedObject, "m_GlobalOnActivateSteps",
                 BuildStepScope.EnvironmentActivate,
                 "Global on activate actions",
                 "Run whenever any environment is activated, before that environment's own actions."));
-            root.Add(activateCard);
+            page.Add(activateCard);
 
-            var preCard = BuildManagerUI.Card();
+            var preCard = new EckCard();
             preCard.Add(new StepListView(serializedObject, "m_GlobalPreBuildSteps", BuildStepScope.PreBuild,
                 "Global pre build actions",
                 "Run first, before the environment and profile actions, for every build in this project."));
-            root.Add(preCard);
+            page.Add(preCard);
 
-            var postCard = BuildManagerUI.Card();
+            var postCard = new EckCard();
             postCard.Add(new StepListView(serializedObject, "m_GlobalPostBuildSteps", BuildStepScope.PostBuild,
                 "Global post build actions",
                 "Run last, after the profile and environment actions."));
-            root.Add(postCard);
+            page.Add(postCard);
 
-            root.Add(BuildAgentSkillCard());
-            root.Add(BuildExtensionCard());
-            root.Add(BuildRuntimeCard());
+            page.Add(BuildAgentSkillCard());
+            page.Add(BuildAppearanceCard());
+            page.Add(BuildExtensionCard());
+            page.Add(BuildRuntimeCard());
 
-            root.Bind(serializedObject);
-            return root;
+            page.Bind(serializedObject);
+            return page;
         }
 
         /// <summary>
@@ -101,21 +102,19 @@ namespace BuildManagerKit.Editor
         {
             var common = Settings.Common;
 
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Common configuration",
                 "The settings that are the same in every environment — product and company name, bundle "
                 + "identifier, icon, shared runtime variables and versioning. Every environment starts from "
                 + "them and overrides only what differs, so a rename is one edit. A profile that versions "
                 + "itself still wins over both.");
 
-            card.Add(BuildManagerUI.KeyValue("Shared values",
+            card.Add(EckText.KeyValue("Shared values",
                 common.IsConfigured ? common.Describe() : "nothing shared yet"));
 
-            var edit = new Button(() => BuildManagerWindow.Open("Environments"))
-            {
-                text = "Edit In Environments Tab",
-                tooltip = "The panel at the top of the Environments tab, above the environment list."
-            };
+            var edit = EckButton.Secondary("Edit In Environments Tab",
+                    () => BuildManagerWindow.Open("Environments"))
+                .Tip("The panel at the top of the Environments tab, above the environment list.");
 
             edit.style.alignSelf = Align.FlexStart;
             edit.style.marginTop = 6;
@@ -126,7 +125,7 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildAgentSkillCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "AI assistant skill",
                 "Ships with the package. Teaches a coding agent to manage this project's environments, "
                 + "config assets and builds through the validated command line instead of editing the "
@@ -135,19 +134,39 @@ namespace BuildManagerKit.Editor
             var project = AgentSkill.GetState(AgentSkillScope.Project);
             var user = AgentSkill.GetState(AgentSkillScope.User);
 
-            card.Add(BuildManagerUI.KeyValue("This project", Describe(project)));
-            card.Add(BuildManagerUI.KeyValue("This machine", Describe(user)));
-
-            var row = new VisualElement();
-            row.AddToClassList("bmk-row");
-            row.style.marginTop = 6;
+            card.Add(EckText.KeyValue("This project", Describe(project)));
+            card.Add(EckText.KeyValue("This machine", Describe(user)));
 
             var needsAttention = project != AgentSkillState.UpToDate && user != AgentSkillState.UpToDate;
-            row.Add(needsAttention
-                ? BuildManagerUI.PrimaryButton("Install Skill…", AgentSkillWindow.Open)
-                : new Button(AgentSkillWindow.Open) { text = "Manage Skill…" });
 
+            var row = EckLayout.Row(needsAttention
+                ? EckButton.Primary("Install Skill…", AgentSkillWindow.Open)
+                : EckButton.Secondary("Manage Skill…", AgentSkillWindow.Open));
+
+            row.style.marginTop = 6;
             card.Add(row);
+
+            return card;
+        }
+
+        /// <summary>
+        /// The theme picker, embedded rather than linked: the window's appearance is an
+        /// EditorCoreKit-wide preference, and someone looking for it will look here first.
+        /// </summary>
+        private VisualElement BuildAppearanceCard()
+        {
+            var card = new EckCard(
+                "Appearance",
+                "This window is built on EditorCoreKit, so its theme and density are the ones every tool "
+                + "built on the kit shares. Changing either restyles all of them live.");
+
+            // The picker is built to fill a Preferences pane, so it is given a height here rather
+            // than being left to grow inside a page that is already scrolling.
+            var picker = new EckThemeSettingsView(compact: true);
+            picker.style.flexGrow = 0;
+            picker.style.height = 260;
+
+            card.Add(picker);
             return card;
         }
 
@@ -164,16 +183,12 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildExtensionCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Extending the pipeline",
                 "Two ways to add your own logic. Both are picked up automatically — no registration needed.");
 
-            card.Add(BuildManagerUI.SectionTitle("1 · A configurable action"));
-            var stepExample = new TextField
-            {
-                multiline = true,
-                isReadOnly = true,
-                value = @"[Serializable]
+            card.Add(EckText.SectionTitle("1 · A configurable action"));
+            card.Add(EckText.Code(@"[Serializable]
 [BuildStepMenu(""Custom/Upload To CDN"", Tooltip = ""Uploads the archive to the CDN."")]
 public sealed class UploadToCdnStep : BuildStep
 {
@@ -193,28 +208,18 @@ public sealed class UploadToCdnStep : BuildStep
         // throw new BuildStepException(""…"") to fail the build
         context.AddArtifact(context.OutputPath);
     }
-}"
-            };
-            stepExample.AddToClassList("bmk-code");
-            card.Add(stepExample);
+}"));
 
-            card.Add(BuildManagerUI.SectionTitle("2 · A plain code hook"));
-            var hookExample = new TextField
-            {
-                multiline = true,
-                isReadOnly = true,
-                value = @"[BuildHook(BuildStepScope.PreBuild, Order = -100)]
+            card.Add(EckText.SectionTitle("2 · A plain code hook"));
+            card.Add(EckText.Code(@"[BuildHook(BuildStepScope.PreBuild, Order = -100)]
 static void StampLicences(BuildContext context)
 {
     LicenceBaker.Bake(context.Version, context.Environment.Id);
-}"
-            };
-            hookExample.AddToClassList("bmk-code");
-            card.Add(hookExample);
+}"));
 
-            card.Add(BuildManagerUI.SectionTitle("Registered right now"));
-            card.Add(BuildManagerUI.KeyValue("Action types", BuildStepRegistry.Descriptors.Count.ToString()));
-            card.Add(BuildManagerUI.KeyValue("Code hooks",
+            card.Add(EckText.SectionTitle("Registered right now"));
+            card.Add(EckText.KeyValue("Action types", BuildStepRegistry.Descriptors.Count.ToString()));
+            card.Add(EckText.KeyValue("Code hooks",
                 BuildStepRegistry.Hooks.Count == 0
                     ? "none"
                     : string.Join(", ", BuildStepRegistry.Hooks.Select(hook => hook.DisplayName))));
@@ -224,35 +229,28 @@ static void StampLicences(BuildContext context)
 
         private VisualElement BuildRuntimeCard()
         {
-            var card = BuildManagerUI.Card(
+            var card = new EckCard(
                 "Runtime access",
                 "The generated BuildInfo asset lets shipped code read the environment it was built with. It is "
                 + "regenerated on every build and on every Editor environment switch, so play mode agrees with "
                 + "the player.");
 
-            var example = new TextField
-            {
-                multiline = true,
-                isReadOnly = true,
-                value = @"using BuildManagerKit;
+            card.Add(EckText.Code(@"using BuildManagerKit;
 
 if (BuildInfo.Current.IsEnvironment(""prod""))
     Analytics.Enable();
 
 string api = BuildInfo.Current.GetVariable(""api_url"", ""https://localhost:8080"");
-Debug.Log(BuildInfo.Current.ShortVersionString);   // 1.4.2+118 (prod)"
-            };
-            example.AddToClassList("bmk-code");
-            card.Add(example);
+Debug.Log(BuildInfo.Current.ShortVersionString);   // 1.4.2+118 (prod)"));
 
             var info = BuildInfoWriter.Load();
-            card.Add(BuildManagerUI.KeyValue("Generated asset",
+            card.Add(EckText.KeyValue("Generated asset",
                 info != null ? ProjectPaths.BuildInfoAssetPath : "not generated yet"));
 
             if (info != null)
             {
-                card.Add(BuildManagerUI.KeyValue("Current contents", info.ToString()));
-                card.Add(new Button(BuildInfoWriter.Delete) { text = "Delete Generated Asset" });
+                card.Add(EckText.KeyValue("Current contents", info.ToString()));
+                card.Add(EckButton.Danger("Delete Generated Asset", BuildInfoWriter.Delete));
             }
 
             return card;

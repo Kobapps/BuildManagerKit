@@ -16,7 +16,16 @@ namespace BuildManagerKit.Editor
         private static void OpenWindow() => BuildManagerWindow.Open();
 
         [MenuItem(k_Root + "Build Selected Profile %#&b", priority = 1)]
-        private static void BuildSelected()
+        private static void BuildSelected() => BuildSelected(false);
+
+        [MenuItem(k_Root + "Build And Run Selected Profile %#&r", priority = 2)]
+        private static void BuildAndRunSelected() => BuildSelected(true);
+
+        /// <summary>
+        /// Builds the selected profile, optionally launching it. Shared by both menu entries so the
+        /// "no profiles yet" message cannot drift between them.
+        /// </summary>
+        private static void BuildSelected(bool runAfterBuild)
         {
             var settings = BuildManagerSettings.Instance;
             var profile = settings.GetEnabledProfiles().FirstOrDefault();
@@ -28,10 +37,10 @@ namespace BuildManagerKit.Editor
                 return;
             }
 
-            BuildManagerWindow.Open().BuildSelected(false);
+            BuildManagerWindow.Open().BuildSelected(false, runAfterBuild);
         }
 
-        [MenuItem(k_Root + "Switch To Next Environment %#e", priority = 2)]
+        [MenuItem(k_Root + "Switch To Next Environment %#e", priority = 3)]
         private static void NextEnvironment() => EnvironmentManager.ActivateNext();
 
         [MenuItem(k_Root + "Switch To Next Environment %#e", validate = true)]
@@ -108,11 +117,21 @@ namespace BuildManagerKit.Editor
             EditorGUIUtility.PingObject(settings);
         }
 
+        [MenuItem(k_Root + "Open Build Output Folder", priority = 39)]
+        private static void OpenOutputFolder()
+        {
+            var settings = BuildManagerSettings.Instance;
+
+            BuildManagerUI.RevealOutputFolder(
+                settings.GetEnabledProfiles().FirstOrDefault(),
+                settings.ActiveEnvironment);
+        }
+
         [MenuItem(k_Root + "Open Build Log Folder", priority = 40)]
         private static void OpenLogFolder()
         {
             var folder = ProjectPaths.MakeAbsolute(BuildManagerSettings.Instance.LogFolder);
-            System.IO.Directory.CreateDirectory(folder);
+            ProjectPaths.EnsureDirectory(folder);
             EditorUtility.RevealInFinder(folder);
         }
 

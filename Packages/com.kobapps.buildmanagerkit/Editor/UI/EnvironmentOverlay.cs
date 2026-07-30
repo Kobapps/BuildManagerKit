@@ -1,7 +1,6 @@
-using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
 using UnityEditor.Overlays;
-using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace BuildManagerKit.Editor
@@ -48,50 +47,39 @@ namespace BuildManagerKit.Editor
             var settings = BuildManagerSettings.InstanceOrNull;
             if (settings == null || settings.Environments.Count == 0)
             {
-                m_Root.Add(BuildManagerUI.Muted("No environments configured."));
+                m_Root.Add(EckText.Muted("No environments configured."));
 
-                m_Root.Add(new Button(() =>
+                m_Root.Add(EckButton.Primary("Create dev / stage / prod", () =>
                 {
                     BuildManagerBootstrap.CreateDefaultEnvironments();
                     Rebuild();
-                }) { text = "Create dev / stage / prod" });
+                }));
 
                 return;
             }
 
             var active = settings.ActiveEnvironment;
 
+            var list = new VisualElement();
+            list.AddToClassList(EckClass.List);
+
             foreach (var environment in settings.GetSortedEnvironments())
             {
                 var captured = environment;
                 var isActive = environment == active;
 
-                var row = new VisualElement();
-                row.AddToClassList("bmk-list-item");
-                row.style.height = 22;
+                var row = new EckListRow(
+                        environment.DisplayName,
+                        isActive ? null : () => EnvironmentManager.Activate(captured, true))
+                    .WithDot(environment.Color);
 
-                var dot = new VisualElement();
-                dot.AddToClassList("bmk-pill__dot");
-                dot.style.backgroundColor = environment.Color;
-
-                var label = new Label(environment.DisplayName);
-                label.AddToClassList("bmk-grow");
-                label.style.fontSize = 11;
-                if (isActive)
-                    label.style.unityFontStyleAndWeight = FontStyle.Bold;
-
-                row.Add(dot);
-                row.Add(label);
-
-                if (isActive)
-                    row.AddToClassList("bmk-list-item--selected");
-                else
-                    row.RegisterCallback<MouseDownEvent>(_ => EnvironmentManager.Activate(captured, true));
-
-                m_Root.Add(row);
+                row.Selected = isActive;
+                list.Add(row);
             }
 
-            var footer = new Button(() => BuildManagerWindow.Open("Environments")) { text = "Manage…" };
+            m_Root.Add(list);
+
+            var footer = EckButton.Secondary("Manage…", () => BuildManagerWindow.Open("Environments"));
             footer.style.marginTop = 4;
             m_Root.Add(footer);
         }

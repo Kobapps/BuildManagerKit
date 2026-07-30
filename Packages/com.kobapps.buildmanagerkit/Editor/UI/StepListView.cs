@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EditorCoreKit.Editor;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -12,6 +12,12 @@ namespace BuildManagerKit.Editor
     /// Editor for a <c>[SerializeReference] List&lt;BuildStep&gt;</c>: an ordered stack of cards
     /// that can be enabled, reordered, duplicated and removed, plus an "Add Action" menu built
     /// from <see cref="BuildStepRegistry"/>.
+    ///
+    /// Each card is an <see cref="EckExpandableCard"/> and the grip is EditorCoreKit's, so the
+    /// list looks and drags like every other ordered stack of configuration in the editor. The
+    /// rows are still built by hand rather than through <c>EckReorderableList</c>: the backing
+    /// store is a <c>SerializedProperty</c> array, not an <c>IList&lt;T&gt;</c>, so every move has
+    /// to go through <c>MoveArrayElement</c> to stay undoable.
     ///
     /// Actions are stored inline on the owning asset, so authoring a pipeline never creates loose
     /// sub-assets and the whole configuration stays in one readable YAML file.
@@ -54,27 +60,20 @@ namespace BuildManagerKit.Editor
             m_Scope = scope;
             m_Level = level;
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-row");
-
-            var titleLabel = new Label(title);
-            titleLabel.AddToClassList("bmk-card__title");
-            titleLabel.style.marginBottom = 0;
-
-            var addButton = new Button { text = "+ Add Action" };
-            addButton.clicked += () => ShowAddMenu(addButton.worldBound);
-
-            header.Add(titleLabel);
-            header.Add(BuildManagerUI.Spacer());
-            header.Add(addButton);
-
+            var header = new EckToolbar();
+            header.Add(EckText.SectionTitle(title));
+            header.PushRight();
+            header.Add(EckDropdownButton.Create(EckIcons.Plus + " Add Action", BuildAddMenu));
             Add(header);
 
             if (!string.IsNullOrEmpty(description))
-                Add(BuildManagerUI.Muted(description));
+                Add(EckText.Muted(description));
 
             m_Items = new VisualElement();
-            m_Items.AddToClassList("bmk-reorder-host");
+
+            // The reorder host is the positioning context the drop placeholder is measured against;
+            // without it the greyed slot lands relative to the wrong element.
+            m_Items.AddToClassList(EckClass.ReorderHost);
             m_Items.style.marginTop = 4;
             Add(m_Items);
 
@@ -90,15 +89,13 @@ namespace BuildManagerKit.Editor
             var list = m_SerializedObject.FindProperty(m_PropertyPath);
             if (list == null || !list.isArray)
             {
-                m_Items.Add(BuildManagerUI.Muted($"Property '{m_PropertyPath}' was not found."));
+                m_Items.Add(EckText.Muted($"Property '{m_PropertyPath}' was not found."));
                 return;
             }
 
             if (list.arraySize == 0)
             {
-                var empty = new Label("No actions yet. Use “Add Action” to build a pipeline.");
-                empty.AddToClassList("bmk-empty");
-                m_Items.Add(empty);
+                m_Items.Add(EckEmptyState.Line("No actions yet. Use “Add Action” to build a pipeline."));
                 return;
             }
 
@@ -111,135 +108,102 @@ namespace BuildManagerKit.Editor
             var element = list.GetArrayElementAtIndex(index);
             var step = element.managedReferenceValue as BuildStep;
 
-            var card = new VisualElement();
-            card.AddToClassList("bmk-step");
-
             if (step == null)
-            {
-                card.Add(BuildBrokenHeader(list, index));
-                return card;
-            }
-
-            if (!step.Enabled)
-                card.AddToClassList("bmk-step--disabled");
+                return BuildBrokenCard(list, index);
 
             var key = step.Guid;
+            var count = list.arraySize;
+
             var expanded = m_Expanded.Contains(key);
+            var path = element.propertyPath;
 
-            var header = new VisualElement();
-            header.AddToClassList("bmk-step__header");
+            var card = new EckExpandableCard(step.Title, SafeSummary(step), expanded)
+                .WithIndex(index);
 
-            // Order is execution order, so dragging a card is the primary way to change what runs
-            // when. The ⋮ menu keeps Move Up / Move Down for keyboard and long lists.
-            var handle = DragReorder.CreateHandle("Drag to reorder — actions run top to bottom");
-            DragReorder.Attach(m_Items, card, handle, Move);
+            card.Header.tooltip = BuildStepRegistry.GetTooltip(step.GetType());
 
-            var indexLabel = new Label((index + 1).ToString());
-            indexLabel.AddToClassList("bmk-step__index");
+            // The body is built the first time the card is opened rather than up front: a settings
+            // asset can carry a few dozen actions, and a PropertyField for each of them is not free.
+            var populated = expanded;
 
-            var foldout = new Label(expanded ? "▼" : "▶");
-            foldout.style.width = 14;
-            foldout.style.fontSize = 9;
+            // Remembered by guid rather than by index, so opening a card and then dragging it does
+            // not leave a different action expanded.
+            card.ExpandedChanged += isExpanded =>
+            {
+                if (!isExpanded)
+                {
+                    m_Expanded.Remove(key);
+                    return;
+                }
+
+                m_Expanded.Add(key);
+
+                if (populated)
+                    return;
+
+                populated = true;
+                DrawBody(card, path);
+            };
 
             var enabledProperty = element.FindPropertyRelative("m_Enabled");
-            var enabledToggle = new Toggle { value = enabledProperty != null && enabledProperty.boolValue };
-            enabledToggle.style.marginRight = 4;
-            enabledToggle.tooltip = "Enable or skip this action.";
-            enabledToggle.RegisterValueChangedCallback(evt =>
+            card.WithEnableToggle(enabledProperty != null && enabledProperty.boolValue, value =>
             {
                 if (enabledProperty == null)
                     return;
 
-                enabledProperty.boolValue = evt.newValue;
+                enabledProperty.boolValue = value;
                 Apply();
-                Rebuild();
             });
-
-            var title = new Label(step.Title);
-            title.AddToClassList("bmk-step__title");
-            title.tooltip = BuildStepRegistry.GetTooltip(step.GetType());
-
-            var summary = new Label(SafeSummary(step));
-            summary.AddToClassList("bmk-step__summary");
-
-            var menuButton = new Button { text = "⋮" };
-            menuButton.style.width = 22;
-            menuButton.clicked += () => ShowItemMenu(menuButton.worldBound, index, list.arraySize);
-
-            header.Add(handle);
-            header.Add(indexLabel);
-            header.Add(foldout);
-            header.Add(enabledToggle);
-            header.Add(title);
 
             if (step.Key.Length > 0)
             {
-                var keyBadge = new Label("⇄ " + step.Key)
-                {
-                    tooltip = "Override key. Among actions sharing this key only the most specific runs: "
-                              + "profile beats environment beats global."
-                };
-
-                keyBadge.AddToClassList("bmk-step__key");
-                header.Add(keyBadge);
+                card.WithTag(
+                    "⇄ " + step.Key,
+                    EckTone.Accent,
+                    "Override key. Among actions sharing this key only the most specific runs: "
+                    + "profile beats environment beats global.");
             }
 
-            header.Add(summary);
-            header.Add(menuButton);
+            card.WithOverflowMenu(menu => BuildItemMenu(menu, index, count));
 
-            // Only the inert parts of the header toggle the card: the enable toggle and the menu
-            // button own their own clicks, and their inner elements are what actually receive the
-            // event, so testing evt.target against them is not reliable.
-            void ToggleExpanded(MouseDownEvent evt)
-            {
-                if (evt.button != 0)
-                    return;
-
-                if (!m_Expanded.Remove(key))
-                    m_Expanded.Add(key);
-
-                Rebuild();
-                evt.StopPropagation();
-            }
-
-            indexLabel.RegisterCallback<MouseDownEvent>(ToggleExpanded);
-            foldout.RegisterCallback<MouseDownEvent>(ToggleExpanded);
-            title.RegisterCallback<MouseDownEvent>(ToggleExpanded);
-            summary.RegisterCallback<MouseDownEvent>(ToggleExpanded);
-
-            card.Add(header);
+            // Order is execution order, so dragging a card is the primary way to change what runs
+            // when. The ⋮ menu keeps Move Up / Move Down for keyboard and long lists.
+            var handle = EckDragReorder.CreateHandle("Drag to reorder — actions run top to bottom");
+            card.Header.Insert(0, handle);
+            EckDragReorder.Attach(m_Items, card, handle, Move);
 
             if (expanded)
-            {
-                var body = new VisualElement();
-                body.AddToClassList("bmk-step__body");
-                BuildManagerUI.DrawChildren(body, element, m_SerializedObject, k_HeaderFields);
-                card.Add(body);
-            }
+                DrawBody(card, path);
 
             return card;
         }
 
-        private VisualElement BuildBrokenHeader(SerializedProperty list, int index)
+        /// <summary>
+        /// Draws one action's fields into its card body.
+        ///
+        /// The property is looked up again from its path rather than captured: a card outlives
+        /// several <c>ApplyModifiedProperties</c> calls, and a stale <c>SerializedProperty</c>
+        /// draws the wrong action rather than failing.
+        /// </summary>
+        private void DrawBody(VisualElement card, string propertyPath)
         {
-            var header = new VisualElement();
-            header.AddToClassList("bmk-step__header");
+            var element = m_SerializedObject.FindProperty(propertyPath);
 
-            var label = new Label("Missing action — the script was removed or renamed");
-            label.AddToClassList("bmk-step__title");
-            label.style.color = new Color(0.97f, 0.32f, 0.29f);
-
-            var remove = new Button(() =>
-            {
-                RemoveAt(list, index);
-                Rebuild();
-            }) { text = "Remove" };
-
-            header.Add(label);
-            header.Add(BuildManagerUI.Spacer());
-            header.Add(remove);
-            return header;
+            if (element != null)
+                EckProperty.DrawChildren(card, element, m_SerializedObject, k_HeaderFields);
         }
+
+        /// <summary>
+        /// The card shown for a slot whose script was removed or renamed. It cannot be edited, only
+        /// found and dropped — so it is a banner rather than an expandable card.
+        /// </summary>
+        private VisualElement BuildBrokenCard(SerializedProperty list, int index) =>
+            new EckBanner(EckTone.Error, "Missing action — the script was removed or renamed")
+                .WithAction("Remove", () =>
+                {
+                    RemoveAt(list, index);
+                    Rebuild();
+                });
 
         private static string SafeSummary(BuildStep step)
         {
@@ -253,23 +217,21 @@ namespace BuildManagerKit.Editor
             }
         }
 
-        private void ShowAddMenu(Rect anchor)
+        private void BuildAddMenu(EckMenu menu)
         {
-            var menu = new GenericMenu();
             var any = false;
 
             foreach (var descriptor in BuildStepRegistry.GetDescriptors(m_Scope))
             {
                 any = true;
                 var captured = descriptor;
-                menu.AddItem(new GUIContent(captured.MenuPath), false, () => AddStep(captured));
+                menu.Item(captured.MenuPath, () => AddStep(captured));
             }
 
             if (!any)
-                menu.AddDisabledItem(new GUIContent("No actions available for this list"));
+                menu.Disabled("No actions available for this list");
 
             AppendOverrideGlobalMenu(menu);
-            BuildManagerUI.ShowMenu(menu, anchor);
         }
 
         /// <summary>
@@ -277,7 +239,7 @@ namespace BuildManagerKit.Editor
         /// copies it into this list with a shared override key, so this copy replaces the global
         /// original for this environment or profile only.
         /// </summary>
-        private void AppendOverrideGlobalMenu(GenericMenu menu)
+        private void AppendOverrideGlobalMenu(EckMenu menu)
         {
             if (m_Level == BuildStepScopeLevel.Global)
                 return;
@@ -290,17 +252,17 @@ namespace BuildManagerKit.Editor
             if (globals.Count == 0)
                 return;
 
-            menu.AddSeparator(string.Empty);
+            menu.Separator();
 
             foreach (var global in globals)
             {
                 var captured = global;
-                var label = new GUIContent("Override Global/" + Sanitize(captured.Title));
+                var path = "Override Global/" + Sanitize(captured.Title);
 
                 if (ListContainsKeyOf(captured))
-                    menu.AddDisabledItem(label);
+                    menu.Disabled(path);
                 else
-                    menu.AddItem(label, false, () => OverrideGlobal(settings, captured));
+                    menu.Item(path, () => OverrideGlobal(settings, captured));
             }
         }
 
@@ -384,39 +346,35 @@ namespace BuildManagerKit.Editor
 
         private static string Sanitize(string label) => label?.Replace('/', '∕') ?? string.Empty;
 
-        private void ShowItemMenu(Rect anchor, int index, int count)
+        private void BuildItemMenu(EckMenu menu, int index, int count)
         {
-            var menu = new GenericMenu();
-
             if (index > 0)
-                menu.AddItem(new GUIContent("Move Up"), false, () => Move(index, index - 1));
+                menu.Item("Move Up", () => Move(index, index - 1));
             else
-                menu.AddDisabledItem(new GUIContent("Move Up"));
+                menu.Disabled("Move Up");
 
             if (index < count - 1)
-                menu.AddItem(new GUIContent("Move Down"), false, () => Move(index, index + 1));
+                menu.Item("Move Down", () => Move(index, index + 1));
             else
-                menu.AddDisabledItem(new GUIContent("Move Down"));
+                menu.Disabled("Move Down");
 
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Duplicate"), false, () => Duplicate(index));
+            menu.Separator()
+                .Item("Duplicate", () => Duplicate(index));
 
             if (m_Level != BuildStepScopeLevel.Global)
             {
-                menu.AddSeparator(string.Empty);
-                menu.AddItem(new GUIContent("Make Global (move)"), false, () => PromoteToGlobal(index, true));
-                menu.AddItem(new GUIContent("Make Global (copy)"), false, () => PromoteToGlobal(index, false));
+                menu.Separator()
+                    .Item("Make Global (move)", () => PromoteToGlobal(index, true))
+                    .Item("Make Global (copy)", () => PromoteToGlobal(index, false));
             }
 
-            menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Remove"), false, () =>
-            {
-                var list = m_SerializedObject.FindProperty(m_PropertyPath);
-                RemoveAt(list, index);
-                Rebuild();
-            });
-
-            BuildManagerUI.ShowMenu(menu, anchor);
+            menu.Separator()
+                .Item("Remove", () =>
+                {
+                    var list = m_SerializedObject.FindProperty(m_PropertyPath);
+                    RemoveAt(list, index);
+                    Rebuild();
+                });
         }
 
         private void AddStep(BuildStepDescriptor descriptor)
