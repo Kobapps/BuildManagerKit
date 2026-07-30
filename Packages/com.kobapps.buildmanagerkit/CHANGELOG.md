@@ -4,6 +4,27 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] — 2026-07-30
+
+### Fixed
+
+- **Installing the package on its own no longer fills the console with errors.** 1.3.0 depended on
+  EditorCoreKit but could only document the requirement — the Package Manager accepts version numbers
+  in a package's `dependencies` and nothing else, so a git-distributed package cannot declare a
+  git-distributed dependency. A project that installed only this package therefore compiled the whole
+  editor assembly against types that were not there, producing a `CS0246` per use.
+
+  The editor assembly now carries a `BUILDMANAGERKIT_EDITORCOREKIT` define constraint, satisfied by a
+  version define on the package, so without the kit it is not compiled rather than compiled and
+  broken. The same constraint covers the tests and the samples.
+
+- **The dependency installs itself.** A small `BuildManagerKit.Bootstrap` assembly — compiled only
+  while EditorCoreKit is *missing*, so it ships in no working project — adds it through
+  `Client.Add` on the first domain load and reports what happened. A batch-mode Editor logs the
+  requirement instead: CI must resolve what its manifest says, and a build that rewrites its own
+  dependencies is not reproducible. *Tools ▸ Build Manager Kit ▸ Install EditorCoreKit (required)…*
+  retries a failed install.
+
 ## [1.3.0] — 2026-07-30
 
 ### Added
