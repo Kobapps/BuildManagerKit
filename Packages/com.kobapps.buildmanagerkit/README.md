@@ -40,11 +40,32 @@ Add it from the Package Manager with
 newer. The runtime assembly contains a single
 small `ScriptableObject`; everything else is editor only.
 
-The window is built on [EditorCoreKit](https://github.com/Kobapps/EditorCoreKit), so add that too —
-`https://github.com/Kobapps/EditorCoreKit.git?path=Packages/com.kobapps.editorcorekit`. It is a
-git-only package, which the Package Manager cannot resolve from another package's manifest, so it
-has to be added to the project rather than pulled in automatically; without it the editor assembly
-does not compile. Every theme and density it ships applies to this window too — choose one under
+### The EditorCoreKit dependency
+
+The window is built on [EditorCoreKit](https://github.com/Kobapps/EditorCoreKit), and **it installs
+itself**: the first time the Editor loads this package without it, the dependency is added and the
+window is available as soon as scripts finish compiling. Nothing to do.
+
+It cannot be a normal `dependencies` entry, and that is a Package Manager rule rather than an
+oversight: only version numbers are allowed there, so a package distributed over git cannot declare
+a git dependency of its own. Two consequences worth knowing:
+
+- **Until the kit is present the editor assembly is not compiled at all.** It carries a define
+  constraint, so a project without EditorCoreKit gets a switched-off tool and one explanatory log
+  line rather than a screen of errors about missing types. Add it and everything appears.
+- **On CI, nothing installs itself.** A batch-mode Editor logs the requirement and stops there,
+  because a build that rewrites its own dependencies is not reproducible. Put both packages in your
+  committed `Packages/manifest.json`:
+
+  ```json
+  "com.kobapps.buildmanagerkit": "https://github.com/Kobapps/BuildManagerKit.git?path=Packages/com.kobapps.buildmanagerkit",
+  "com.kobapps.editorcorekit": "https://github.com/Kobapps/EditorCoreKit.git?path=Packages/com.kobapps.editorcorekit"
+  ```
+
+If the automatic install fails — no git on `PATH`, no network, no access to the repository — the
+error says so and *Tools ▸ Build Manager Kit ▸ Install EditorCoreKit (required)…* retries it.
+
+Every theme and density EditorCoreKit ships applies to this window too; choose one under
 `Preferences ▸ EditorCoreKit`.
 
 ## Two minute setup

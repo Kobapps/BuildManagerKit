@@ -19,8 +19,15 @@
     ],
     "autoReferenced": false,
     "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
+        "UNITY_INCLUDE_TESTS",
+        "BUILDMANAGERKIT_EDITORCOREKIT"
     ],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.kobapps.editorcorekit",
+            "expression": "1.0.0",
+            "define": "BUILDMANAGERKIT_EDITORCOREKIT"
+        }
+    ],
     "noEngineReferences": false
 }
