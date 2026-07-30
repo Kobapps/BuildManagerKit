@@ -4,6 +4,42 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-07-30
+
+### Added
+
+- **Build and Run** — builds, then launches: a standalone player on this machine, an Android or iOS
+  build deployed to the connected device, a WebGL build in a browser. In the header ▼ menu, the ⋮
+  menu, the Dashboard, a profile's header and its inspector, and at
+  *Tools ▸ Build Manager Kit ▸ Build And Run Selected Profile* (`⌘⇧⌥R`). It is a property of the run
+  rather than of the profile — `BuildRunRequest.RunAfterBuild`, `-bmkRun` on the command line — so no
+  profile asset can leave a player running on a build server. The confirmation dialog of a protected
+  environment says which of the two it is about to do, and the reveal-on-success Finder window is
+  skipped when the build was launched.
+- **Open Output Folder** — the resolved output folder of the selected profile, from the status bar,
+  both menus, the Dashboard, a profile's header and its inspector, and
+  *Tools ▸ Build Manager Kit ▸ Open Build Output Folder*. `BuildRunner.ResolveOutputPath` and
+  `ResolveOutputDirectory` expose the same resolution a build performs — every token, the version,
+  the build number and the platform's file extension — so the path shown is the path used. Nothing is
+  created: a profile with no builds yet opens the deepest existing folder of that path and logs which
+  one, rather than failing or making an empty directory.
+
+### Changed
+
+- **The window is built on [EditorCoreKit](https://github.com/Kobapps/EditorCoreKit)**, which must be
+  added to the project alongside this package — the Package Manager cannot resolve a git-only
+  dependency declared by another package, so it will not appear on its own. The window shell, cards,
+  pills, badges, banners, lists, drag-to-reorder, action cards, the searchable console, the empty
+  states and the theme all come from the kit, which means every theme and density it ships now applies
+  to this window; pick them in the Settings tab or under `Preferences ▸ EditorCoreKit`. The
+  package-local `DragReorder`, `DashedBox` and `BuildConsole` are gone, and `BuildManager.uss` is down
+  to the few rules only a build tool needs, all written against the kit's colour tokens.
+- The two-pane pages — Profiles, Environments, History — have a draggable divider that remembers
+  where it was left, and the action list is a proper collapsible card whose body is built the first
+  time it is opened.
+- A profile's detail header keeps Build, Build and Run and Open Output Folder as buttons and moves
+  Validate, Dry Run, Ping Asset and Delete behind a ⋮ menu.
+
 ## [1.2.0] — 2026-07-30
 
 ### Added
