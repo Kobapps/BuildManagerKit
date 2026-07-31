@@ -4,7 +4,7 @@
    first by BuildManagerUI.ApplyStyles. What is left here is the handful of controls that only a
    build tool has.
 
-   Colours are written as var(--eck-…) rather than as literals, for the same reason the kit does
+   Colours are written as var(--kui-…) rather than as literals, for the same reason the kit does
    it: that is what lets these controls pick up a theme they have never heard of. Never introduce
    a literal colour in this file — a `rgb(...)` here is a control that stays blue in the ember
    theme and stays dark under the parchment one. */
@@ -38,16 +38,16 @@
     border-width: 0;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    border-top-right-radius: var(--eck-radius);
-    border-bottom-right-radius: var(--eck-radius);
-    background-color: var(--eck-accent);
-    color: var(--eck-on-accent);
+    border-top-right-radius: var(--kui-radius);
+    border-bottom-right-radius: var(--kui-radius);
+    background-color: var(--kui-accent);
+    color: var(--kui-on-accent);
     font-size: 9px;
     -unity-text-align: middle-center;
 }
 
 .bmk-build-button__caret:hover {
-    background-color: var(--eck-accent-strong);
+    background-color: var(--kui-accent-strong);
 }
 
 .bmk-build-button__caret:disabled {
@@ -63,7 +63,7 @@
     margin-bottom: 2px;
 }
 
-.bmk-versioning Label.eck-muted {
+.bmk-versioning Label.kui-muted {
     margin-top: 6px;
 }
 
@@ -85,7 +85,7 @@
 .bmk-common-row {
     flex-shrink: 0;
     margin-bottom: 2px;
-    border-radius: var(--eck-radius);
+    border-radius: var(--kui-radius);
     border-width: 1px;
-    border-color: var(--eck-border);
+    border-color: var(--kui-border);
 }

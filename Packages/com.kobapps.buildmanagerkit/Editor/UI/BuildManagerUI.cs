@@ -31,7 +31,7 @@ namespace BuildManagerKit.Editor
             if (element == null)
                 return;
 
-            EckTheme.Apply(element);
+            KUITheme.Apply(element);
 
             var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(StyleSheetPath);
             if (styleSheet != null && !element.styleSheets.Contains(styleSheet))
@@ -39,26 +39,26 @@ namespace BuildManagerKit.Editor
         }
 
         /// <summary>The tone a build outcome reads as.</summary>
-        internal static EckTone ToneOf(BuildRunStatus status)
+        internal static KUITone ToneOf(BuildRunStatus status)
         {
             switch (status)
             {
-                case BuildRunStatus.Succeeded: return EckTone.Success;
-                case BuildRunStatus.Failed: return EckTone.Error;
-                case BuildRunStatus.Cancelled: return EckTone.Warning;
-                default: return EckTone.Neutral;
+                case BuildRunStatus.Succeeded: return KUITone.Success;
+                case BuildRunStatus.Failed: return KUITone.Error;
+                case BuildRunStatus.Cancelled: return KUITone.Warning;
+                default: return KUITone.Neutral;
             }
         }
 
         /// <summary>Badge for a build status, coloured by outcome.</summary>
-        internal static EckBadge StatusBadge(BuildRunStatus status)
+        internal static KUIBadge StatusBadge(BuildRunStatus status)
         {
             switch (status)
             {
-                case BuildRunStatus.Succeeded: return new EckBadge("SUCCESS", EckTone.Success);
-                case BuildRunStatus.Failed: return new EckBadge("FAILED", EckTone.Error);
-                case BuildRunStatus.Cancelled: return new EckBadge("CANCELLED", EckTone.Warning);
-                default: return new EckBadge("UNKNOWN");
+                case BuildRunStatus.Succeeded: return new KUIBadge("SUCCESS", KUITone.Success);
+                case BuildRunStatus.Failed: return new KUIBadge("FAILED", KUITone.Error);
+                case BuildRunStatus.Cancelled: return new KUIBadge("CANCELLED", KUITone.Warning);
+                default: return new KUIBadge("UNKNOWN");
             }
         }
 
@@ -66,20 +66,20 @@ namespace BuildManagerKit.Editor
         /// The tone a log line is drawn in. Debug and Info share the neutral tone — the kit's
         /// console has one dim colour, and the distinction was never worth a second grey.
         /// </summary>
-        internal static EckTone ToneOf(BuildLogLevel level)
+        internal static KUITone ToneOf(BuildLogLevel level)
         {
             switch (level)
             {
-                case BuildLogLevel.Success: return EckTone.Success;
-                case BuildLogLevel.Warning: return EckTone.Warning;
-                case BuildLogLevel.Error: return EckTone.Error;
-                default: return EckTone.Neutral;
+                case BuildLogLevel.Success: return KUITone.Success;
+                case BuildLogLevel.Warning: return KUITone.Warning;
+                case BuildLogLevel.Error: return KUITone.Error;
+                default: return KUITone.Neutral;
             }
         }
 
         /// <summary>Converts a build log entry into a console line.</summary>
-        internal static EckLogEntry ToLogEntry(BuildLogEntry entry) =>
-            new EckLogEntry(
+        internal static KUILogEntry ToLogEntry(BuildLogEntry entry) =>
+            new KUILogEntry(
                 entry.elapsedSeconds > 0 ? entry.Format() : entry.message,
                 ToneOf(entry.level),
                 entry.scope);
@@ -113,13 +113,13 @@ namespace BuildManagerKit.Editor
             var container = new VisualElement();
             container.AddToClassList("bmk-build-button");
 
-            var main = EckButton.Primary(text, onClick);
+            var main = KUIButton.Primary(text, onClick);
             main.AddToClassList("bmk-build-button__main");
             main.tooltip = tooltip;
             main.SetEnabled(enabled);
 
-            var caret = new Button { text = EckIcons.Caret, tooltip = "Build a specific target" };
-            caret.AddToClassList(EckClass.Button);
+            var caret = new Button { text = KUIIcons.Caret, tooltip = "Build a specific target" };
+            caret.AddToClassList(KUIClass.Button);
             caret.AddToClassList("bmk-build-button__caret");
             caret.SetEnabled(menuEnabled);
 
@@ -221,7 +221,7 @@ namespace BuildManagerKit.Editor
                   + $"once there instead of repeating them on each {subject}."
                 : $"{total} global action(s) also run for this {subject}: {breakdown}.";
 
-            return new EckBanner(EckTone.Accent, message)
+            return new KUIBanner(KUITone.Accent, message)
                 .WithAction(
                     total == 0 ? "Add Global Actions" : "Edit Global Actions",
                     () => BuildManagerWindow.Open("Settings"))

@@ -53,7 +53,7 @@ namespace BuildManagerKit.Editor
         private const string k_SelectedTabKey = "BuildManagerKit.SelectedTab";
 
         private readonly List<BuildManagerView> m_Views = new List<BuildManagerView>();
-        private EckWindowShell m_Shell;
+        private KUIWindowShell m_Shell;
         private int m_SelectedIndex;
 
         /// <summary>The profile the header Build button acts on.</summary>
@@ -113,13 +113,13 @@ namespace BuildManagerKit.Editor
             foreach (var view in m_Views)
                 view.Attach(this);
 
-            m_Shell = new EckWindowShell("Build Manager Kit", "v" + AgentSkill.PackageVersion)
+            m_Shell = new KUIWindowShell("Build Manager Kit", "v" + AgentSkill.PackageVersion)
                 .MountInto(rootVisualElement);
 
-            m_Shell.Status.Add(EckButton.Secondary("Builds", RevealOutputFolder)
+            m_Shell.Status.Add(KUIButton.Secondary("Builds", RevealOutputFolder)
                 .Tip("Open the folder builds of the selected profile are written to."));
 
-            m_Shell.Status.Add(EckButton.Secondary("Logs", RevealLogFolder)
+            m_Shell.Status.Add(KUIButton.Secondary("Logs", RevealLogFolder)
                 .Tip("Open the folder containing the text log of every build."));
 
             m_Shell.Status.Set("Idle");
@@ -166,7 +166,7 @@ namespace BuildManagerKit.Editor
             var settings = BuildManagerSettings.Instance;
             var environment = settings.ActiveEnvironment;
 
-            container.Add(new EckPill(
+            container.Add(new KUIPill(
                 environment != null ? environment.DisplayName : "No environment",
                 environment != null ? environment.Color : Color.gray,
                 ShowEnvironmentMenu,
@@ -175,7 +175,7 @@ namespace BuildManagerKit.Editor
             var activeTarget = EditorUserBuildSettings.activeBuildTarget;
             var activeSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
 
-            container.Add(new EckPill(
+            container.Add(new KUIPill(
                 BuildTargetUtility.GetShortName(activeTarget),
                 BuildTargetIcons.Get(activeTarget, activeSubtarget),
                 ShowPlatformMenu,
@@ -183,7 +183,7 @@ namespace BuildManagerKit.Editor
                 + "Switching preserves each platform's own settings."));
 
             // Separates "what am I looking at" from "what will I build".
-            container.Add(EckLayout.VerticalSeparator());
+            container.Add(KUILayout.VerticalSeparator());
 
             var profile = SelectedProfile;
 
@@ -199,7 +199,7 @@ namespace BuildManagerKit.Editor
                     : "No build profile yet. Use the ▼ menu to create one.",
                 !BuildRunner.IsRunning));
 
-            container.Add(EckDropdownButton.Overflow(BuildOverflowMenu));
+            container.Add(KUIDropdownButton.Overflow(BuildOverflowMenu));
         }
 
         private void RebuildSidebar()
@@ -248,7 +248,7 @@ namespace BuildManagerKit.Editor
             var settings = BuildManagerSettings.Instance;
             var active = settings.ActiveEnvironment;
 
-            var menu = EckMenu.New()
+            var menu = KUIMenu.New()
                 .Items(
                     settings.GetSortedEnvironments(),
                     environment => environment.DisplayName,
@@ -309,9 +309,9 @@ namespace BuildManagerKit.Editor
             menu.AddItem(new GUIContent("Forget Saved Platform Settings"), false,
                 PlatformSwitcher.ClearStoredSettings);
 
-            // Built as a GenericMenu rather than through EckMenu: the entries carry platform icons,
+            // Built as a GenericMenu rather than through KUIMenu: the entries carry platform icons,
             // which only GUIContent can express.
-            EckMenu.ShowUnder(menu, anchor);
+            KUIMenu.ShowUnder(menu, anchor);
         }
 
         /// <summary>
@@ -387,10 +387,10 @@ namespace BuildManagerKit.Editor
 
             menu.AddItem(new GUIContent("Manage Profiles…"), false, () => Open("Profiles"));
 
-            EckMenu.ShowUnder(menu, anchor);
+            KUIMenu.ShowUnder(menu, anchor);
         }
 
-        private void BuildOverflowMenu(EckMenu menu) =>
+        private void BuildOverflowMenu(KUIMenu menu) =>
             menu.Item("Build and Run", () => BuildSelected(false, true), !BuildRunner.IsRunning, false)
                 .Item("Dry Run", () => BuildSelected(true))
                 .Item("Validate Selected Profile", ValidateSelected)
@@ -510,7 +510,7 @@ namespace BuildManagerKit.Editor
 
         private void HandleRunStarted(BuildContext context)
         {
-            m_Shell?.Status.Set($"Building {context.Profile.DisplayName}…", "RUNNING", EckTone.Warning);
+            m_Shell?.Status.Set($"Building {context.Profile.DisplayName}…", "RUNNING", KUITone.Warning);
 
             foreach (var view in m_Views)
                 view.OnBuildStateChanged();
@@ -523,7 +523,7 @@ namespace BuildManagerKit.Editor
             m_Shell?.Status.Set(
                 result.ToSummaryLine(),
                 result.Succeeded ? "SUCCESS" : "FAILED",
-                result.Succeeded ? EckTone.Success : EckTone.Error);
+                result.Succeeded ? KUITone.Success : KUITone.Error);
 
             foreach (var view in m_Views)
                 view.OnBuildStateChanged();

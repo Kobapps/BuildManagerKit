@@ -20,19 +20,19 @@ namespace BuildManagerKit.Editor
         /// <inheritdoc />
         internal override VisualElement Build()
         {
-            var page = EckLayout.Page();
+            var page = KUILayout.Page();
 
             var serializedObject = new SerializedObject(Settings);
 
-            var intro = new EckCard(
+            var intro = new KUICard(
                 "Build queues",
                 "A queue builds several profiles back to back. Switching platforms between entries reloads the "
                 + "script domain, so the queue stores its progress and resumes itself — it keeps going unattended, "
                 + "in the Editor and on CI.");
 
-            var toolbar = new EckToolbar();
+            var toolbar = new KUIToolbar();
 
-            toolbar.Add(EckButton.Secondary(EckIcons.Plus + " New Queue", () =>
+            toolbar.Add(KUIButton.Secondary(KUIIcons.Plus + " New Queue", () =>
             {
                 Settings.QueuesMutable.Add(new BuildQueue
                 {
@@ -45,7 +45,7 @@ namespace BuildManagerKit.Editor
 
             if (BuildQueueRunner.IsRunning)
             {
-                toolbar.Add(EckButton.Danger("Cancel Running Queue", () =>
+                toolbar.Add(KUIButton.Danger("Cancel Running Queue", () =>
                 {
                     BuildQueueRunner.Cancel();
                     Window.RefreshCurrentView();
@@ -57,7 +57,7 @@ namespace BuildManagerKit.Editor
 
             if (Settings.Queues.Count == 0)
             {
-                page.Add(new EckEmptyState(
+                page.Add(new KUIEmptyState(
                     "No queues configured yet",
                     "A queue is an ordered list of profiles built one after another — a release run, in one press."));
 
@@ -85,9 +85,9 @@ namespace BuildManagerKit.Editor
             BuildQueue queue,
             int index)
         {
-            var card = new EckCard(queue.Title, $"{queue.ActiveEntries.Count()} enabled entries");
+            var card = new KUICard(queue.Title, $"{queue.ActiveEntries.Count()} enabled entries");
 
-            var run = EckButton.Primary("Run Queue", () =>
+            var run = KUIButton.Primary("Run Queue", () =>
             {
                 if (!EditorUtility.DisplayDialog(
                         "Run queue",
@@ -103,7 +103,7 @@ namespace BuildManagerKit.Editor
 
             run.SetEnabled(!BuildRunner.IsRunning && !BuildQueueRunner.IsRunning && queue.ActiveEntries.Any());
 
-            card.WithHeaderAction(EckButton.Danger("Remove", () =>
+            card.WithHeaderAction(KUIButton.Danger("Remove", () =>
             {
                 if (!EditorUtility.DisplayDialog("Remove queue", $"Remove '{queue.Title}'?", "Remove", "Cancel"))
                     return;
@@ -117,11 +117,11 @@ namespace BuildManagerKit.Editor
 
             if (BuildQueueRunner.IsRunning && BuildQueueRunner.CurrentQueue == queue)
             {
-                card.Add(new EckBanner(EckTone.Warning,
+                card.Add(new KUIBanner(KUITone.Warning,
                     $"Running — entry {BuildQueueRunner.CurrentIndex + 1} of {queue.ActiveEntries.Count()}"));
             }
 
-            EckProperty.DrawChildren(card, property, serializedObject);
+            KUIProperty.DrawChildren(card, property, serializedObject);
             return card;
         }
     }

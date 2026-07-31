@@ -33,7 +33,7 @@ namespace BuildManagerKit.Editor
 
             root.Add(BuildToolbar());
 
-            var split = new EckSplitView(330f, false, "BuildManagerKit.History");
+            var split = new KUISplitView(330f, false, "BuildManagerKit.History");
             split.First.Add(BuildList());
             split.Second.Add(BuildDetail());
 
@@ -46,9 +46,9 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildToolbar()
         {
-            var toolbar = new EckToolbar();
+            var toolbar = new KUIToolbar();
 
-            var search = new EckSearchField(
+            var search = new KUISearchField(
                 "Filter by profile, environment, version, branch or message",
                 value =>
                 {
@@ -74,7 +74,7 @@ namespace BuildManagerKit.Editor
             toolbar.Add(search);
             toolbar.Add(statusField);
             toolbar.PushRight();
-            toolbar.Add(EckButton.Danger("Clear History", () =>
+            toolbar.Add(KUIButton.Danger("Clear History", () =>
             {
                 if (!EditorUtility.DisplayDialog(
                         "Clear history",
@@ -102,7 +102,7 @@ namespace BuildManagerKit.Editor
 
             if (entries.Length == 0)
             {
-                container.Add(EckEmptyState.Line(
+                container.Add(KUIEmptyState.Line(
                     BuildHistory.Entries.Count == 0
                         ? "No builds recorded yet."
                         : "No runs match the current filter."));
@@ -113,13 +113,13 @@ namespace BuildManagerKit.Editor
             m_Selected ??= entries[0];
 
             var list = new VisualElement();
-            list.AddToClassList(EckClass.List);
+            list.AddToClassList(KUIClass.List);
 
             foreach (var entry in entries)
             {
                 var captured = entry;
 
-                var row = new EckListRow(
+                var row = new KUIListRow(
                         $"{entry.result.profileName} · {entry.result.environmentId}",
                         () =>
                         {
@@ -144,56 +144,56 @@ namespace BuildManagerKit.Editor
         {
             // A ScrollView: the metadata card plus a full build log easily exceeds the window.
             var detail = new ScrollView();
-            detail.AddToClassList(EckClass.Detail);
+            detail.AddToClassList(KUIClass.Detail);
 
             if (m_Selected == null)
             {
-                detail.Add(EckEmptyState.Line("Select a run to inspect its log."));
+                detail.Add(KUIEmptyState.Line("Select a run to inspect its log."));
                 return detail;
             }
 
             var result = m_Selected.result;
-            var card = new EckCard($"{result.profileName} · {result.target}");
+            var card = new KUICard($"{result.profileName} · {result.target}");
 
             card.Header.Insert(0, BuildManagerUI.StatusBadge(result.status));
 
             if (!string.IsNullOrEmpty(result.outputPath))
             {
-                card.WithHeaderAction(EckButton.Secondary("Reveal Output",
+                card.WithHeaderAction(KUIButton.Secondary("Reveal Output",
                     () => EditorUtility.RevealInFinder(result.outputPath)));
             }
 
-            card.WithHeaderAction(EckButton.Secondary("Copy JSON",
+            card.WithHeaderAction(KUIButton.Secondary("Copy JSON",
                 () => EditorGUIUtility.systemCopyBuffer = result.ToJson()));
 
-            card.Add(EckText.KeyValue("Environment", result.environmentId));
-            card.Add(EckText.KeyValue("Version", $"{result.version}+{result.buildNumber}"));
-            card.Add(EckText.KeyValue("Duration",
+            card.Add(KUIText.KeyValue("Environment", result.environmentId));
+            card.Add(KUIText.KeyValue("Version", $"{result.version}+{result.buildNumber}"));
+            card.Add(KUIText.KeyValue("Duration",
                 BuildTargetUtility.FormatDuration(TimeSpan.FromSeconds(result.durationSeconds))));
-            card.Add(EckText.KeyValue("Size", BuildTargetUtility.FormatSize(result.outputSizeBytes)));
-            card.Add(EckText.KeyValue("Errors / warnings", $"{result.errors} / {result.warnings}"));
-            card.Add(EckText.KeyValue("Git",
+            card.Add(KUIText.KeyValue("Size", BuildTargetUtility.FormatSize(result.outputSizeBytes)));
+            card.Add(KUIText.KeyValue("Errors / warnings", $"{result.errors} / {result.warnings}"));
+            card.Add(KUIText.KeyValue("Git",
                 string.IsNullOrEmpty(result.gitCommit) ? "—" : $"{result.gitBranch}@{result.gitCommit}"));
-            card.Add(EckText.KeyValue("Output", result.outputPath));
+            card.Add(KUIText.KeyValue("Output", result.outputPath));
 
             if (!string.IsNullOrEmpty(result.message))
             {
-                card.Add(EckText.KeyValue("Message", result.message,
-                    result.Succeeded ? (Color?)null : EckTheme.Error));
+                card.Add(KUIText.KeyValue("Message", result.message,
+                    result.Succeeded ? (Color?)null : KUITheme.Error));
             }
 
             if (result.artifacts is { Length: > 0 })
             {
-                card.Add(EckText.SectionTitle("Artifacts"));
+                card.Add(KUIText.SectionTitle("Artifacts"));
 
                 var artifacts = new VisualElement();
-                artifacts.AddToClassList(EckClass.List);
+                artifacts.AddToClassList(KUIClass.List);
 
                 foreach (var artifact in result.artifacts)
                 {
                     var captured = artifact;
-                    artifacts.Add(new EckListRow(artifact)
-                        .WithAction(EckButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(captured))));
+                    artifacts.Add(new KUIListRow(artifact)
+                        .WithAction(KUIButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(captured))));
                 }
 
                 card.Add(artifacts);
@@ -201,16 +201,16 @@ namespace BuildManagerKit.Editor
 
             detail.Add(card);
 
-            var logCard = new EckCard("Log");
+            var logCard = new KUICard("Log");
             var text = m_Selected.HasLog ? BuildHistory.ReadLog(m_Selected) : result.log;
 
             if (string.IsNullOrEmpty(text))
             {
-                logCard.Add(EckEmptyState.Line("No log was stored for this run."));
+                logCard.Add(KUIEmptyState.Line("No log was stored for this run."));
             }
             else
             {
-                var console = new EckLogConsole();
+                var console = new KUILogConsole();
                 console.style.minHeight = 220;
                 console.SetPlainText(text);
                 logCard.Add(console);

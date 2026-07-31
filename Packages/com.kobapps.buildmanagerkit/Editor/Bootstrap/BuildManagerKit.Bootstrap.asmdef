@@ -16,7 +16,7 @@
     "versionDefines": [
         {
             "name": "com.kobapps.editorcorekit",
-            "expression": "1.0.0",
+            "expression": "2.0.0",
             "define": "BUILDMANAGERKIT_EDITORCOREKIT"
         }
     ],

@@ -31,7 +31,7 @@ namespace BuildManagerKit.Editor
         {
             BuildManagerUI.ApplyStyles(rootVisualElement);
 
-            var page = EckLayout.Page();
+            var page = KUILayout.Page();
             rootVisualElement.Add(page);
 
             m_Body = new VisualElement();
@@ -47,8 +47,8 @@ namespace BuildManagerKit.Editor
 
             if (AgentSkill.SourcePath == null)
             {
-                m_Body.Add(new EckBanner(
-                    EckTone.Error,
+                m_Body.Add(new KUIBanner(
+                    KUITone.Error,
                     "Skill not found in the package",
                     "This copy of Build Manager Kit does not contain Skills~/buildmanagerkit. If you are "
                     + "working from a partial checkout, restore the package and reopen this window."));
@@ -72,20 +72,20 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildIntroCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "AI assistant skill",
                 "Teaches a coding agent — Claude Code and other agents that read .claude/skills — how to "
                 + "manage this project's environments, config assets and builds correctly.");
 
-            card.Add(EckText.Body(
+            card.Add(KUIText.Body(
                 "Without it an agent will try to edit the .asset files as text. That looks like it works "
                 + "and silently drops action lists and asset references, because they are "
                 + "[SerializeReference] entries and GUID pairs rather than plain values. The skill routes "
                 + "the agent through the command line instead, which validates every change and runs the "
                 + "project health check afterwards."));
 
-            card.Add(EckText.KeyValue("Skill name", AgentSkill.SkillName));
-            card.Add(EckText.KeyValue("Ships with", "Build Manager Kit " + AgentSkill.PackageVersion));
+            card.Add(KUIText.KeyValue("Skill name", AgentSkill.SkillName));
+            card.Add(KUIText.KeyValue("Ships with", "Build Manager Kit " + AgentSkill.PackageVersion));
 
             return card;
         }
@@ -95,39 +95,39 @@ namespace BuildManagerKit.Editor
             var state = AgentSkill.GetState(scope);
             var path = AgentSkill.GetInstallPath(scope);
 
-            var card = new EckCard(title, explanation);
+            var card = new KUICard(title, explanation);
             card.Header.Insert(0, StateBadge(state));
 
-            card.Add(EckText.Code(path));
+            card.Add(KUIText.Code(path));
 
-            var buttons = EckLayout.Row();
+            var buttons = KUILayout.Row();
             buttons.style.marginTop = 8;
 
             switch (state)
             {
                 case AgentSkillState.NotInstalled:
-                    buttons.Add(EckButton.Primary("Install", () => Install(scope)));
+                    buttons.Add(KUIButton.Primary("Install", () => Install(scope)));
                     break;
 
                 case AgentSkillState.Outdated:
-                    buttons.Add(EckButton.Primary("Update", () => Install(scope)));
-                    buttons.Add(EckButton.Secondary("Remove", () => Remove(scope)));
+                    buttons.Add(KUIButton.Primary("Update", () => Install(scope)));
+                    buttons.Add(KUIButton.Secondary("Remove", () => Remove(scope)));
                     break;
 
                 case AgentSkillState.UpToDate:
-                    buttons.Add(EckButton.Secondary("Reinstall", () => Install(scope)));
-                    buttons.Add(EckButton.Secondary("Remove", () => Remove(scope)));
+                    buttons.Add(KUIButton.Secondary("Reinstall", () => Install(scope)));
+                    buttons.Add(KUIButton.Secondary("Remove", () => Remove(scope)));
                     break;
             }
 
             if (Directory.Exists(path))
-                buttons.Add(EckButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(path)));
+                buttons.Add(KUIButton.Secondary("Reveal", () => EditorUtility.RevealInFinder(path)));
 
             card.Add(buttons);
 
             if (state == AgentSkillState.Outdated)
             {
-                card.Add(EckText.Muted(
+                card.Add(KUIText.Muted(
                     "The installed copy differs from the one in the package — either it came from an older "
                     + "version, or it has local edits. Updating overwrites it."));
             }
@@ -137,13 +137,13 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildContentsCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "What gets written",
                 "Plain markdown. Nothing executable, and nothing inside Assets/.");
 
-            card.Add(EckText.Code(string.Join("\n", AgentSkill.GetFileList())));
+            card.Add(KUIText.Code(string.Join("\n", AgentSkill.GetFileList())));
 
-            card.Add(EckText.Muted(
+            card.Add(KUIText.Muted(
                 "Installing replaces the whole folder, so a file dropped in a later version of the package "
                 + "does not linger. Removing deletes it — but only after checking the folder really is this "
                 + "skill."));
@@ -151,14 +151,14 @@ namespace BuildManagerKit.Editor
             return card;
         }
 
-        private static EckBadge StateBadge(AgentSkillState state)
+        private static KUIBadge StateBadge(AgentSkillState state)
         {
             switch (state)
             {
-                case AgentSkillState.UpToDate: return new EckBadge("Installed", EckTone.Success);
-                case AgentSkillState.Outdated: return new EckBadge("Update available", EckTone.Warning);
-                case AgentSkillState.SourceMissing: return new EckBadge("Package copy missing", EckTone.Error);
-                default: return new EckBadge("Not installed");
+                case AgentSkillState.UpToDate: return new KUIBadge("Installed", KUITone.Success);
+                case AgentSkillState.Outdated: return new KUIBadge("Update available", KUITone.Warning);
+                case AgentSkillState.SourceMissing: return new KUIBadge("Package copy missing", KUITone.Error);
+                default: return new KUIBadge("Not installed");
             }
         }
 

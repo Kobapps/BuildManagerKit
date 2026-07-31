@@ -64,7 +64,7 @@ namespace BuildManagerKit.Editor
             counter.tooltip = "The stored counter. Auto Increment bumps it after every successful build.";
             numberDetails.Add(counter);
 
-            var summary = EckText.Muted(string.Empty);
+            var summary = KUIText.Muted(string.Empty);
             root.Add(summary);
 
             void Refresh()

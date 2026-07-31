@@ -13,9 +13,9 @@ namespace BuildManagerKit.Editor
     /// that can be enabled, reordered, duplicated and removed, plus an "Add Action" menu built
     /// from <see cref="BuildStepRegistry"/>.
     ///
-    /// Each card is an <see cref="EckExpandableCard"/> and the grip is EditorCoreKit's, so the
+    /// Each card is an <see cref="KUIExpandableCard"/> and the grip is EditorCoreKit's, so the
     /// list looks and drags like every other ordered stack of configuration in the editor. The
-    /// rows are still built by hand rather than through <c>EckReorderableList</c>: the backing
+    /// rows are still built by hand rather than through <c>KUIReorderableList</c>: the backing
     /// store is a <c>SerializedProperty</c> array, not an <c>IList&lt;T&gt;</c>, so every move has
     /// to go through <c>MoveArrayElement</c> to stay undoable.
     ///
@@ -60,20 +60,20 @@ namespace BuildManagerKit.Editor
             m_Scope = scope;
             m_Level = level;
 
-            var header = new EckToolbar();
-            header.Add(EckText.SectionTitle(title));
+            var header = new KUIToolbar();
+            header.Add(KUIText.SectionTitle(title));
             header.PushRight();
-            header.Add(EckDropdownButton.Create(EckIcons.Plus + " Add Action", BuildAddMenu));
+            header.Add(KUIDropdownButton.Create(KUIIcons.Plus + " Add Action", BuildAddMenu));
             Add(header);
 
             if (!string.IsNullOrEmpty(description))
-                Add(EckText.Muted(description));
+                Add(KUIText.Muted(description));
 
             m_Items = new VisualElement();
 
             // The reorder host is the positioning context the drop placeholder is measured against;
             // without it the greyed slot lands relative to the wrong element.
-            m_Items.AddToClassList(EckClass.ReorderHost);
+            m_Items.AddToClassList(KUIClass.ReorderHost);
             m_Items.style.marginTop = 4;
             Add(m_Items);
 
@@ -89,13 +89,13 @@ namespace BuildManagerKit.Editor
             var list = m_SerializedObject.FindProperty(m_PropertyPath);
             if (list == null || !list.isArray)
             {
-                m_Items.Add(EckText.Muted($"Property '{m_PropertyPath}' was not found."));
+                m_Items.Add(KUIText.Muted($"Property '{m_PropertyPath}' was not found."));
                 return;
             }
 
             if (list.arraySize == 0)
             {
-                m_Items.Add(EckEmptyState.Line("No actions yet. Use “Add Action” to build a pipeline."));
+                m_Items.Add(KUIEmptyState.Line("No actions yet. Use “Add Action” to build a pipeline."));
                 return;
             }
 
@@ -117,7 +117,7 @@ namespace BuildManagerKit.Editor
             var expanded = m_Expanded.Contains(key);
             var path = element.propertyPath;
 
-            var card = new EckExpandableCard(step.Title, SafeSummary(step), expanded)
+            var card = new KUIExpandableCard(step.Title, SafeSummary(step), expanded)
                 .WithIndex(index);
 
             card.Header.tooltip = BuildStepRegistry.GetTooltip(step.GetType());
@@ -159,7 +159,7 @@ namespace BuildManagerKit.Editor
             {
                 card.WithTag(
                     "⇄ " + step.Key,
-                    EckTone.Accent,
+                    KUITone.Accent,
                     "Override key. Among actions sharing this key only the most specific runs: "
                     + "profile beats environment beats global.");
             }
@@ -168,9 +168,9 @@ namespace BuildManagerKit.Editor
 
             // Order is execution order, so dragging a card is the primary way to change what runs
             // when. The ⋮ menu keeps Move Up / Move Down for keyboard and long lists.
-            var handle = EckDragReorder.CreateHandle("Drag to reorder — actions run top to bottom");
+            var handle = KUIDragReorder.CreateHandle("Drag to reorder — actions run top to bottom");
             card.Header.Insert(0, handle);
-            EckDragReorder.Attach(m_Items, card, handle, Move);
+            KUIDragReorder.Attach(m_Items, card, handle, Move);
 
             if (expanded)
                 DrawBody(card, path);
@@ -190,7 +190,7 @@ namespace BuildManagerKit.Editor
             var element = m_SerializedObject.FindProperty(propertyPath);
 
             if (element != null)
-                EckProperty.DrawChildren(card, element, m_SerializedObject, k_HeaderFields);
+                KUIProperty.DrawChildren(card, element, m_SerializedObject, k_HeaderFields);
         }
 
         /// <summary>
@@ -198,7 +198,7 @@ namespace BuildManagerKit.Editor
         /// found and dropped — so it is a banner rather than an expandable card.
         /// </summary>
         private VisualElement BuildBrokenCard(SerializedProperty list, int index) =>
-            new EckBanner(EckTone.Error, "Missing action — the script was removed or renamed")
+            new KUIBanner(KUITone.Error, "Missing action — the script was removed or renamed")
                 .WithAction("Remove", () =>
                 {
                     RemoveAt(list, index);
@@ -217,7 +217,7 @@ namespace BuildManagerKit.Editor
             }
         }
 
-        private void BuildAddMenu(EckMenu menu)
+        private void BuildAddMenu(KUIMenu menu)
         {
             var any = false;
 
@@ -239,7 +239,7 @@ namespace BuildManagerKit.Editor
         /// copies it into this list with a shared override key, so this copy replaces the global
         /// original for this environment or profile only.
         /// </summary>
-        private void AppendOverrideGlobalMenu(EckMenu menu)
+        private void AppendOverrideGlobalMenu(KUIMenu menu)
         {
             if (m_Level == BuildStepScopeLevel.Global)
                 return;
@@ -346,7 +346,7 @@ namespace BuildManagerKit.Editor
 
         private static string Sanitize(string label) => label?.Replace('/', '∕') ?? string.Empty;
 
-        private void BuildItemMenu(EckMenu menu, int index, int count)
+        private void BuildItemMenu(KUIMenu menu, int index, int count)
         {
             if (index > 0)
                 menu.Item("Move Up", () => Move(index, index - 1));

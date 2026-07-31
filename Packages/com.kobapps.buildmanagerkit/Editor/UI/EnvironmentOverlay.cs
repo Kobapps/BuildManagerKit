@@ -47,9 +47,9 @@ namespace BuildManagerKit.Editor
             var settings = BuildManagerSettings.InstanceOrNull;
             if (settings == null || settings.Environments.Count == 0)
             {
-                m_Root.Add(EckText.Muted("No environments configured."));
+                m_Root.Add(KUIText.Muted("No environments configured."));
 
-                m_Root.Add(EckButton.Primary("Create dev / stage / prod", () =>
+                m_Root.Add(KUIButton.Primary("Create dev / stage / prod", () =>
                 {
                     BuildManagerBootstrap.CreateDefaultEnvironments();
                     Rebuild();
@@ -61,14 +61,14 @@ namespace BuildManagerKit.Editor
             var active = settings.ActiveEnvironment;
 
             var list = new VisualElement();
-            list.AddToClassList(EckClass.List);
+            list.AddToClassList(KUIClass.List);
 
             foreach (var environment in settings.GetSortedEnvironments())
             {
                 var captured = environment;
                 var isActive = environment == active;
 
-                var row = new EckListRow(
+                var row = new KUIListRow(
                         environment.DisplayName,
                         isActive ? null : () => EnvironmentManager.Activate(captured, true))
                     .WithDot(environment.Color);
@@ -79,7 +79,7 @@ namespace BuildManagerKit.Editor
 
             m_Root.Add(list);
 
-            var footer = EckButton.Secondary("Manage…", () => BuildManagerWindow.Open("Environments"));
+            var footer = KUIButton.Secondary("Manage…", () => BuildManagerWindow.Open("Environments"));
             footer.style.marginTop = 4;
             m_Root.Add(footer);
         }

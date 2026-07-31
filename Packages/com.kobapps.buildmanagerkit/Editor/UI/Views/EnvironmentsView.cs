@@ -64,7 +64,7 @@ namespace BuildManagerKit.Editor
             if (!m_CommonSelected)
                 m_Selected ??= Settings.ActiveEnvironment ?? Settings.GetSortedEnvironments().FirstOrDefault();
 
-            var split = new EckSplitView(220f, false, "BuildManagerKit.Environments");
+            var split = new KUISplitView(220f, false, "BuildManagerKit.Environments");
             split.First.Add(BuildMasterList());
             split.Second.Add(m_CommonSelected ? BuildCommonDetail() : BuildDetail());
 
@@ -81,20 +81,20 @@ namespace BuildManagerKit.Editor
             // The common configuration reads as one more thing you can select and edit, but it is not
             // an environment and must not look like one in the list — so it sits in its own section
             // above, outside the reorderable list.
-            master.Add(EckText.SectionTitle("Shared by every environment"));
+            master.Add(KUIText.SectionTitle("Shared by every environment"));
             master.Add(CreateCommonRow());
-            master.Add(EckLayout.Separator());
-            master.Add(EckText.SectionTitle("Environments"));
+            master.Add(KUILayout.Separator());
+            master.Add(KUIText.SectionTitle("Environments"));
 
-            var toolbar = new EckToolbar();
-            toolbar.Add(EckButton.Secondary(EckIcons.Plus + " New", () =>
+            var toolbar = new KUIToolbar();
+            toolbar.Add(KUIButton.Secondary(KUIIcons.Plus + " New", () =>
             {
                 m_Selected = BuildManagerBootstrap.CreateEnvironment("new", "New Environment", Color.gray);
                 m_CommonSelected = false;
                 Window.RefreshCurrentView();
             }));
 
-            toolbar.Add(EckButton.Secondary("Starter Set", () =>
+            toolbar.Add(KUIButton.Secondary("Starter Set", () =>
             {
                 BuildManagerBootstrap.CreateDefaultEnvironments();
                 Window.RefreshCurrentView();
@@ -104,12 +104,12 @@ namespace BuildManagerKit.Editor
 
             if (Settings.Environments.Count == 0)
             {
-                master.Add(EckEmptyState.Line("No environments yet."));
+                master.Add(KUIEmptyState.Line("No environments yet."));
                 return master;
             }
 
             master.Add(BuildEnvironmentList());
-            master.Add(EckText.Muted("Drag to reorder. The order here drives the toolbar "
+            master.Add(KUIText.Muted("Drag to reorder. The order here drives the toolbar "
                                      + "dropdown, the Scene view overlay and every menu."));
 
             return master;
@@ -122,7 +122,7 @@ namespace BuildManagerKit.Editor
         /// </summary>
         private VisualElement CreateCommonRow()
         {
-            var row = new EckListRow("Common configuration", () =>
+            var row = new KUIListRow("Common configuration", () =>
             {
                 m_CommonSelected = true;
                 Window.RefreshCurrentView();
@@ -137,7 +137,7 @@ namespace BuildManagerKit.Editor
 
             if (!Settings.Common.IsConfigured)
             {
-                var empty = new EckBadge("EMPTY") { tooltip = "Nothing is shared yet." };
+                var empty = new KUIBadge("EMPTY") { tooltip = "Nothing is shared yet." };
                 row.WithAction(empty);
             }
 
@@ -152,21 +152,21 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildCommonDetail()
         {
             var detail = new ScrollView();
-            detail.AddToClassList(EckClass.Detail);
+            detail.AddToClassList(KUIClass.Detail);
 
             var serializedObject = new SerializedObject(Settings);
             var common = serializedObject.FindProperty("m_Common");
 
-            var header = new EckCard("Common configuration", null, new Color(0.62f, 0.62f, 0.66f));
-            header.Header.Add(EckBadge.Tag("SHARED"));
-            header.WithHeaderAction(EckButton.Secondary("Ping Settings Asset",
+            var header = new KUICard("Common configuration", null, new Color(0.62f, 0.62f, 0.66f));
+            header.Header.Add(KUIBadge.Tag("SHARED"));
+            header.WithHeaderAction(KUIButton.Secondary("Ping Settings Asset",
                 () => EditorGUIUtility.PingObject(Settings)));
 
-            var summary = EckText.Muted(string.Empty);
+            var summary = KUIText.Muted(string.Empty);
             header.Add(summary);
             detail.Add(header);
 
-            var values = new EckCard(
+            var values = new KUICard(
                 "Player settings",
                 "Applied to every environment that does not fill the same field in itself. An empty field "
                 + "means Build Manager Kit does not manage it, and the project's own player settings are "
@@ -190,7 +190,7 @@ namespace BuildManagerKit.Editor
 
             detail.Add(BuildCommonIconCard(serializedObject, common));
 
-            var variables = new EckCard(
+            var variables = new KUICard(
                 "Shared runtime variables",
                 "Baked into BuildInfo for every environment and readable with "
                 + "BuildInfo.Current.GetVariable(key). An environment declaring the same key overrides the "
@@ -201,7 +201,7 @@ namespace BuildManagerKit.Editor
             variables.Add(variablesField);
             detail.Add(variables);
 
-            var versioning = new EckCard(
+            var versioning = new KUICard(
                 "Versioning",
                 "Where the version string and the build number come from, for every environment and every "
                 + "profile that does not version itself.");
@@ -237,12 +237,12 @@ namespace BuildManagerKit.Editor
         {
             var iconProperty = common.FindPropertyRelative("applicationIcon");
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Application icon",
                 "Used by every environment that does not assign its own. Applied when an environment is "
                 + "activated and when it is built, then restored with the rest of the player settings.");
 
-            var preview = new EckThumbnail(76f, "no icon");
+            var preview = new KUIThumbnail(76f, "no icon");
 
             var fields = new VisualElement();
             fields.style.flexGrow = 1;
@@ -253,11 +253,11 @@ namespace BuildManagerKit.Editor
             iconField.Bind(serializedObject);
             fields.Add(iconField);
 
-            var detailLabel = EckText.Muted(string.Empty);
+            var detailLabel = KUIText.Muted(string.Empty);
             fields.Add(detailLabel);
 
-            var body = EckLayout.Row(preview, fields);
-            body.AddToClassList(EckClass.RowTop);
+            var body = KUILayout.Row(preview, fields);
+            body.AddToClassList(KUIClass.RowTop);
             body.style.marginTop = 8;
             card.Add(body);
 
@@ -294,8 +294,8 @@ namespace BuildManagerKit.Editor
             scroll.style.minHeight = 0;
 
             var list = new VisualElement();
-            list.AddToClassList(EckClass.List);
-            list.AddToClassList(EckClass.ReorderHost);
+            list.AddToClassList(KUIClass.List);
+            list.AddToClassList(KUIClass.ReorderHost);
 
             var environments = Settings.EnvironmentsMutable;
 
@@ -312,7 +312,7 @@ namespace BuildManagerKit.Editor
             {
                 // A deleted asset still occupies a slot; show it so it can be found and removed
                 // rather than silently shifting every index below it.
-                var missing = new EckListRow("(missing environment)")
+                var missing = new KUIListRow("(missing environment)")
                     .WithDragHandle(container, OnReordered);
 
                 missing.style.opacity = 0.6f;
@@ -322,7 +322,7 @@ namespace BuildManagerKit.Editor
 
             var captured = environment;
 
-            var row = new EckListRow(environment.DisplayName, () => Select(captured))
+            var row = new KUIListRow(environment.DisplayName, () => Select(captured))
                 .WithDragHandle(container, OnReordered)
                 .WithDot(environment.Color);
 
@@ -330,7 +330,7 @@ namespace BuildManagerKit.Editor
             row.tooltip = $"{environment.DisplayName} ({environment.Id})";
 
             if (environment == Settings.ActiveEnvironment)
-                row.WithBadge("ACTIVE", EckTone.Success);
+                row.WithBadge("ACTIVE", KUITone.Success);
 
             // Right-click straight on the row: the same actions as the detail header, where deleting
             // one of a long list is actually convenient.
@@ -381,11 +381,11 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildDetail()
         {
             var detail = new ScrollView();
-            detail.AddToClassList(EckClass.Detail);
+            detail.AddToClassList(KUIClass.Detail);
 
             if (m_Selected == null)
             {
-                detail.Add(new EckEmptyState(
+                detail.Add(new KUIEmptyState(
                     "No environments yet",
                     "Environments let one set of profiles produce dev, stage and prod builds — and let the "
                     + "Editor reproduce any of them while you work.",
@@ -402,9 +402,9 @@ namespace BuildManagerKit.Editor
             var serializedObject = new SerializedObject(m_Selected);
             var isActive = m_Selected == Settings.ActiveEnvironment;
 
-            var header = new EckCard(m_Selected.DisplayName, null, m_Selected.Color);
+            var header = new KUICard(m_Selected.DisplayName, null, m_Selected.Color);
 
-            var activate = EckButton.Primary(isActive ? "Active" : "Make Active", () =>
+            var activate = KUIButton.Primary(isActive ? "Active" : "Make Active", () =>
             {
                 EnvironmentManager.Activate(m_Selected, true);
                 Window.RefreshHeader();
@@ -412,28 +412,28 @@ namespace BuildManagerKit.Editor
             });
             activate.SetEnabled(!isActive);
 
-            header.WithHeaderAction(EckButton.Secondary("Ping Asset",
+            header.WithHeaderAction(KUIButton.Secondary("Ping Asset",
                 () => EditorGUIUtility.PingObject(m_Selected)));
 
-            header.WithHeaderAction(EckButton.Danger("Delete", () => DeleteEnvironment(m_Selected))
+            header.WithHeaderAction(KUIButton.Danger("Delete", () => DeleteEnvironment(m_Selected))
                 .Tip("Delete this environment asset and remove it from the settings, the queues and the "
                      + "profiles that reference it."));
 
             header.WithHeaderAction(activate);
 
             var define = m_Selected.EnvironmentDefine;
-            header.Add(EckText.KeyValue("Generated define", string.IsNullOrEmpty(define) ? "disabled" : define));
-            header.Add(EckText.KeyValue("Runtime access",
+            header.Add(KUIText.KeyValue("Generated define", string.IsNullOrEmpty(define) ? "disabled" : define));
+            header.Add(KUIText.KeyValue("Runtime access",
                 $"BuildInfo.Current.IsEnvironment(\"{m_Selected.Id}\")"));
 
             var inheritance = ConfigResolver.DescribeInheritance(Settings, m_Selected);
             if (!string.IsNullOrEmpty(inheritance))
-                header.Add(EckText.Muted(inheritance));
+                header.Add(KUIText.Muted(inheritance));
 
             detail.Add(header);
 
-            var configuration = new EckCard("Configuration");
-            EckProperty.DrawChildren(configuration, serializedObject.GetIterator(), serializedObject,
+            var configuration = new KUICard("Configuration");
+            KUIProperty.DrawChildren(configuration, serializedObject.GetIterator(), serializedObject,
                 k_HiddenFields);
             detail.Add(configuration);
 
@@ -443,7 +443,7 @@ namespace BuildManagerKit.Editor
             detail.Add(BuildPublishedAssetsCard());
             detail.Add(BuildGlobalActionsBanner());
 
-            var activateCard = new EckCard();
+            var activateCard = new KUICard();
             activateCard.Add(new StepListView(serializedObject, "m_OnActivateSteps",
                 BuildStepScope.EnvironmentActivate,
                 "On activate actions",
@@ -452,14 +452,14 @@ namespace BuildManagerKit.Editor
                 BuildStepScopeLevel.Environment));
             detail.Add(activateCard);
 
-            var preCard = new EckCard();
+            var preCard = new KUICard();
             preCard.Add(new StepListView(serializedObject, "m_PreBuildSteps", BuildStepScope.PreBuild,
                 "Pre build actions",
                 "Run for every profile built with this environment.",
                 BuildStepScopeLevel.Environment));
             detail.Add(preCard);
 
-            var postCard = new EckCard();
+            var postCard = new KUICard();
             postCard.Add(new StepListView(serializedObject, "m_PostBuildSteps", BuildStepScope.PostBuild,
                 "Post build actions",
                 "Run for every profile built with this environment.",
@@ -542,7 +542,7 @@ namespace BuildManagerKit.Editor
         /// </summary>
         private VisualElement BuildCommonConfigCard(SerializedObject serializedObject)
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Player settings",
                 "Fill a field in only where this environment differs from the common configuration; clear it "
                 + "to go back to the shared value, shown greyed. Applied when this environment is activated "
@@ -558,7 +558,7 @@ namespace BuildManagerKit.Editor
                 text.textEdition.placeholder = commonValue ?? "not set";
                 card.Add(text);
 
-                var origin = EckText.Muted(string.Empty);
+                var origin = KUIText.Muted(string.Empty);
                 origin.AddToClassList("bmk-inherited__label");
                 card.Add(origin);
 
@@ -617,7 +617,7 @@ namespace BuildManagerKit.Editor
             var overrideProperty = serializedObject.FindProperty("m_OverrideVersioning");
             var versioningProperty = serializedObject.FindProperty("m_Versioning");
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Versioning",
                 "Switch on only when builds of this environment carry a different version from the common "
                 + "configuration — staging shipping a release candidate, for instance. A profile that versions "
@@ -627,7 +627,7 @@ namespace BuildManagerKit.Editor
             toggle.Bind(serializedObject);
             card.Add(toggle);
 
-            var inherited = EckText.Muted(string.Empty);
+            var inherited = KUIText.Muted(string.Empty);
             inherited.AddToClassList("bmk-inherited__label");
             card.Add(inherited);
 
@@ -672,13 +672,13 @@ namespace BuildManagerKit.Editor
             var iconProperty = serializedObject.FindProperty("m_ApplicationIcon");
             var commonIcon = Settings.Common.ApplicationIconOverride;
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Application icon",
                 "A badged or tinted icon per environment stops a tester filing a bug against the wrong "
                 + "build. Applied when this environment is activated and when it is built, then restored "
                 + "with the rest of the player settings — so it never leaks into a production player.");
 
-            var preview = new EckThumbnail(76f, "no icon");
+            var preview = new KUIThumbnail(76f, "no icon");
 
             var fields = new VisualElement();
             fields.style.flexGrow = 1;
@@ -689,11 +689,11 @@ namespace BuildManagerKit.Editor
             iconField.Bind(serializedObject);
             fields.Add(iconField);
 
-            var detailLabel = EckText.Muted(string.Empty);
+            var detailLabel = KUIText.Muted(string.Empty);
             fields.Add(detailLabel);
 
-            var body = EckLayout.Row(preview, fields);
-            body.AddToClassList(EckClass.RowTop);
+            var body = KUILayout.Row(preview, fields);
+            body.AddToClassList(KUIClass.RowTop);
             body.style.marginTop = 8;
             card.Add(body);
 
@@ -733,7 +733,7 @@ namespace BuildManagerKit.Editor
         {
             var resolved = EnvironmentAssetsWriter.Resolve(m_Selected, Settings);
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Published config assets",
                 "Readable at runtime with EnvironmentAssets.Current.Get<T>(key). Only these assets are "
                 + "referenced by the generated Resources asset, so the other environments' assets stay out "
@@ -741,7 +741,7 @@ namespace BuildManagerKit.Editor
 
             if (resolved.Count == 0)
             {
-                card.Add(EckEmptyState.Line(
+                card.Add(KUIEmptyState.Line(
                     "None yet. Add key/asset pairs under Config Assets above, or set project-wide defaults "
                     + "in the Settings tab."));
 
@@ -753,7 +753,7 @@ namespace BuildManagerKit.Editor
                 var ownEntry = m_Selected.GetConfigAsset(entry.key) != null;
                 var typeName = entry.asset != null ? entry.asset.GetType().Name : "missing";
 
-                var row = EckText.KeyValue(
+                var row = KUIText.KeyValue(
                     entry.key,
                     $"{entry.asset.name}  ({typeName})" + (ownEntry ? string.Empty : "  · inherited default"));
 
@@ -764,7 +764,7 @@ namespace BuildManagerKit.Editor
                 card.Add(row);
             }
 
-            var usage = EckText.Code(
+            var usage = KUIText.Code(
                 $"var asset = EnvironmentAssets.Current.Get<YourType>(\"{resolved[0].key}\");");
             usage.style.marginTop = 6;
             card.Add(usage);

@@ -32,20 +32,20 @@ namespace BuildManagerKit.Editor
         /// <inheritdoc />
         internal override VisualElement Build()
         {
-            var page = EckLayout.Page();
+            var page = KUILayout.Page();
 
             var serializedObject = new SerializedObject(Settings);
 
             page.Add(BuildCommonConfigurationCard());
 
-            var behaviour = new EckCard(
+            var behaviour = new KUICard(
                 "Behaviour",
                 "Stored in the settings asset and shared by the Editor and CI.");
-            EckProperty.DrawChildren(behaviour, serializedObject.GetIterator(), serializedObject, k_HiddenFields);
+            KUIProperty.DrawChildren(behaviour, serializedObject.GetIterator(), serializedObject, k_HiddenFields);
 
-            var assetRow = EckLayout.Row(
-                EckButton.Secondary("Ping Settings Asset", () => EditorGUIUtility.PingObject(Settings)),
-                EckButton.Secondary("Rescan Project", () =>
+            var assetRow = KUILayout.Row(
+                KUIButton.Secondary("Ping Settings Asset", () => EditorGUIUtility.PingObject(Settings)),
+                KUIButton.Secondary("Rescan Project", () =>
                 {
                     var added = Settings.DiscoverAssets();
                     Debug.Log($"[BuildManagerKit] Registered {added} new asset(s).");
@@ -57,25 +57,25 @@ namespace BuildManagerKit.Editor
 
             page.Add(behaviour);
 
-            page.Add(new EckCard(
+            page.Add(new KUICard(
                 "Global actions",
                 "These three lists run for every environment and every profile in the project. Put shared "
                 + "work here once rather than repeating it on each environment or profile asset."));
 
-            var activateCard = new EckCard();
+            var activateCard = new KUICard();
             activateCard.Add(new StepListView(serializedObject, "m_GlobalOnActivateSteps",
                 BuildStepScope.EnvironmentActivate,
                 "Global on activate actions",
                 "Run whenever any environment is activated, before that environment's own actions."));
             page.Add(activateCard);
 
-            var preCard = new EckCard();
+            var preCard = new KUICard();
             preCard.Add(new StepListView(serializedObject, "m_GlobalPreBuildSteps", BuildStepScope.PreBuild,
                 "Global pre build actions",
                 "Run first, before the environment and profile actions, for every build in this project."));
             page.Add(preCard);
 
-            var postCard = new EckCard();
+            var postCard = new KUICard();
             postCard.Add(new StepListView(serializedObject, "m_GlobalPostBuildSteps", BuildStepScope.PostBuild,
                 "Global post build actions",
                 "Run last, after the profile and environment actions."));
@@ -102,17 +102,17 @@ namespace BuildManagerKit.Editor
         {
             var common = Settings.Common;
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Common configuration",
                 "The settings that are the same in every environment — product and company name, bundle "
                 + "identifier, icon, shared runtime variables and versioning. Every environment starts from "
                 + "them and overrides only what differs, so a rename is one edit. A profile that versions "
                 + "itself still wins over both.");
 
-            card.Add(EckText.KeyValue("Shared values",
+            card.Add(KUIText.KeyValue("Shared values",
                 common.IsConfigured ? common.Describe() : "nothing shared yet"));
 
-            var edit = EckButton.Secondary("Edit In Environments Tab",
+            var edit = KUIButton.Secondary("Edit In Environments Tab",
                     () => BuildManagerWindow.Open("Environments"))
                 .Tip("The panel at the top of the Environments tab, above the environment list.");
 
@@ -125,7 +125,7 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildAgentSkillCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "AI assistant skill",
                 "Ships with the package. Teaches a coding agent to manage this project's environments, "
                 + "config assets and builds through the validated command line instead of editing the "
@@ -134,14 +134,14 @@ namespace BuildManagerKit.Editor
             var project = AgentSkill.GetState(AgentSkillScope.Project);
             var user = AgentSkill.GetState(AgentSkillScope.User);
 
-            card.Add(EckText.KeyValue("This project", Describe(project)));
-            card.Add(EckText.KeyValue("This machine", Describe(user)));
+            card.Add(KUIText.KeyValue("This project", Describe(project)));
+            card.Add(KUIText.KeyValue("This machine", Describe(user)));
 
             var needsAttention = project != AgentSkillState.UpToDate && user != AgentSkillState.UpToDate;
 
-            var row = EckLayout.Row(needsAttention
-                ? EckButton.Primary("Install Skill…", AgentSkillWindow.Open)
-                : EckButton.Secondary("Manage Skill…", AgentSkillWindow.Open));
+            var row = KUILayout.Row(needsAttention
+                ? KUIButton.Primary("Install Skill…", AgentSkillWindow.Open)
+                : KUIButton.Secondary("Manage Skill…", AgentSkillWindow.Open));
 
             row.style.marginTop = 6;
             card.Add(row);
@@ -155,14 +155,14 @@ namespace BuildManagerKit.Editor
         /// </summary>
         private VisualElement BuildAppearanceCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Appearance",
                 "This window is built on EditorCoreKit, so its theme and density are the ones every tool "
                 + "built on the kit shares. Changing either restyles all of them live.");
 
             // The picker is built to fill a Preferences pane, so it is given a height here rather
             // than being left to grow inside a page that is already scrolling.
-            var picker = new EckThemeSettingsView(compact: true);
+            var picker = new KUIThemeSettingsView(compact: true);
             picker.style.flexGrow = 0;
             picker.style.height = 260;
 
@@ -183,12 +183,12 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildExtensionCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Extending the pipeline",
                 "Two ways to add your own logic. Both are picked up automatically — no registration needed.");
 
-            card.Add(EckText.SectionTitle("1 · A configurable action"));
-            card.Add(EckText.Code(@"[Serializable]
+            card.Add(KUIText.SectionTitle("1 · A configurable action"));
+            card.Add(KUIText.Code(@"[Serializable]
 [BuildStepMenu(""Custom/Upload To CDN"", Tooltip = ""Uploads the archive to the CDN."")]
 public sealed class UploadToCdnStep : BuildStep
 {
@@ -210,16 +210,16 @@ public sealed class UploadToCdnStep : BuildStep
     }
 }"));
 
-            card.Add(EckText.SectionTitle("2 · A plain code hook"));
-            card.Add(EckText.Code(@"[BuildHook(BuildStepScope.PreBuild, Order = -100)]
+            card.Add(KUIText.SectionTitle("2 · A plain code hook"));
+            card.Add(KUIText.Code(@"[BuildHook(BuildStepScope.PreBuild, Order = -100)]
 static void StampLicences(BuildContext context)
 {
     LicenceBaker.Bake(context.Version, context.Environment.Id);
 }"));
 
-            card.Add(EckText.SectionTitle("Registered right now"));
-            card.Add(EckText.KeyValue("Action types", BuildStepRegistry.Descriptors.Count.ToString()));
-            card.Add(EckText.KeyValue("Code hooks",
+            card.Add(KUIText.SectionTitle("Registered right now"));
+            card.Add(KUIText.KeyValue("Action types", BuildStepRegistry.Descriptors.Count.ToString()));
+            card.Add(KUIText.KeyValue("Code hooks",
                 BuildStepRegistry.Hooks.Count == 0
                     ? "none"
                     : string.Join(", ", BuildStepRegistry.Hooks.Select(hook => hook.DisplayName))));
@@ -229,13 +229,13 @@ static void StampLicences(BuildContext context)
 
         private VisualElement BuildRuntimeCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Runtime access",
                 "The generated BuildInfo asset lets shipped code read the environment it was built with. It is "
                 + "regenerated on every build and on every Editor environment switch, so play mode agrees with "
                 + "the player.");
 
-            card.Add(EckText.Code(@"using BuildManagerKit;
+            card.Add(KUIText.Code(@"using BuildManagerKit;
 
 if (BuildInfo.Current.IsEnvironment(""prod""))
     Analytics.Enable();
@@ -244,13 +244,13 @@ string api = BuildInfo.Current.GetVariable(""api_url"", ""https://localhost:8080
 Debug.Log(BuildInfo.Current.ShortVersionString);   // 1.4.2+118 (prod)"));
 
             var info = BuildInfoWriter.Load();
-            card.Add(EckText.KeyValue("Generated asset",
+            card.Add(KUIText.KeyValue("Generated asset",
                 info != null ? ProjectPaths.BuildInfoAssetPath : "not generated yet"));
 
             if (info != null)
             {
-                card.Add(EckText.KeyValue("Current contents", info.ToString()));
-                card.Add(EckButton.Danger("Delete Generated Asset", BuildInfoWriter.Delete));
+                card.Add(KUIText.KeyValue("Current contents", info.ToString()));
+                card.Add(KUIButton.Danger("Delete Generated Asset", BuildInfoWriter.Delete));
             }
 
             return card;

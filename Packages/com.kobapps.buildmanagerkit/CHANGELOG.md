@@ -4,6 +4,20 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-07-31
+
+### Changed
+
+- **Updated for EditorCoreKit 2.0.0**, which renames the kit's `Eck` prefix to `KUI`
+  (`EckBadge` → `KUIBadge`). Every window, view, inspector and drawer now uses the new type names,
+  and `BuildManager.uss` moves to the renamed styling layer — kit classes are `.kui-*` and theme
+  tokens `--kui-*`. BuildManagerKit's own public API is unchanged.
+- **The EditorCoreKit version gate now requires 2.0.0 rather than 1.0.0.** The `versionDefines`
+  expression on the editor, bootstrap, samples and test assemblies read `1.0.0`, which Unity
+  interprets as *that version or newer* — so a project holding EditorCoreKit 1.x still compiled the
+  editor assembly and then failed on every renamed type. Raising the gate means an out-of-date kit
+  now switches the tool off and asks for the newer one, which is what the constraint was there to do.
+
 ## [1.3.1] — 2026-07-30
 
 ### Fixed

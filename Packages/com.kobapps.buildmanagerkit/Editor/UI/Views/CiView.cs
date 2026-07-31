@@ -26,7 +26,7 @@ namespace BuildManagerKit.Editor
             m_Profile ??= Window.SelectedProfile;
             m_Environment ??= Settings.ActiveEnvironment;
 
-            return EckLayout.Page(
+            return KUILayout.Page(
                 BuildSelectionCard(),
                 BuildCommandCard(),
                 BuildTemplateCard(),
@@ -35,7 +35,7 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildSelectionCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Target",
                 "Pick what the generated command line and pipeline should build.");
 
@@ -58,7 +58,7 @@ namespace BuildManagerKit.Editor
             }
             else
             {
-                card.Add(EckEmptyState.Line("Create a build profile first."));
+                card.Add(KUIEmptyState.Line("Create a build profile first."));
             }
 
             var environments = Settings.GetSortedEnvironments().ToList();
@@ -97,34 +97,34 @@ namespace BuildManagerKit.Editor
                 + "  -bmkResultFile build-result.json \\\n"
                 + "  -logFile -";
 
-            var card = new EckCard(
+            var card = new KUICard(
                 "Command line",
                 "Exit codes: 0 success · 1 build failed · 2 usage error · 3 cancelled. "
                 + "The JSON result carries the status, duration, size, error counts and the full log.");
 
-            card.Add(EckText.Code(command));
+            card.Add(KUIText.Code(command));
 
-            var row = EckLayout.Row(
-                EckButton.Secondary("Copy Command", () => EditorGUIUtility.systemCopyBuffer = command),
-                EckButton.Secondary("Copy Arguments Only", () => EditorGUIUtility.systemCopyBuffer =
+            var row = KUILayout.Row(
+                KUIButton.Secondary("Copy Command", () => EditorGUIUtility.systemCopyBuffer = command),
+                KUIButton.Secondary("Copy Arguments Only", () => EditorGUIUtility.systemCopyBuffer =
                     $"-bmkProfile {profileId} -bmkEnv {environmentId}"));
 
             row.style.marginTop = 6;
             card.Add(row);
 
-            card.Add(EckText.SectionTitle("Other entry points"));
-            card.Add(EckText.KeyValue("Queue", "BuildCLI.BuildQueue  -bmkQueue <id>"));
-            card.Add(EckText.KeyValue("Environment", "BuildCLI.SwitchEnvironment  -bmkEnv <id>"));
-            card.Add(EckText.KeyValue("Platform", "BuildCLI.SwitchPlatform  -bmkTarget <BuildTarget>"));
-            card.Add(EckText.KeyValue("Inventory", "BuildCLI.List"));
-            card.Add(EckText.KeyValue("Pull request check", "BuildCLI.ValidateAll"));
+            card.Add(KUIText.SectionTitle("Other entry points"));
+            card.Add(KUIText.KeyValue("Queue", "BuildCLI.BuildQueue  -bmkQueue <id>"));
+            card.Add(KUIText.KeyValue("Environment", "BuildCLI.SwitchEnvironment  -bmkEnv <id>"));
+            card.Add(KUIText.KeyValue("Platform", "BuildCLI.SwitchPlatform  -bmkTarget <BuildTarget>"));
+            card.Add(KUIText.KeyValue("Inventory", "BuildCLI.List"));
+            card.Add(KUIText.KeyValue("Pull request check", "BuildCLI.ValidateAll"));
 
             return card;
         }
 
         private VisualElement BuildTemplateCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Pipeline template",
                 "Generated for this project, wired to the selection above.");
 
@@ -145,16 +145,16 @@ namespace BuildManagerKit.Editor
             text.style.whiteSpace = WhiteSpace.Normal;
 
             var scroll = new ScrollView();
-            scroll.AddToClassList(EckClass.Code);
+            scroll.AddToClassList(KUIClass.Code);
             scroll.style.maxHeight = 320;
             scroll.Add(text);
             card.Add(scroll);
 
             var fileName = CiTemplateGenerator.GetDefaultFileName(m_Provider);
 
-            var row = EckLayout.Row(
-                EckButton.Secondary("Copy", () => EditorGUIUtility.systemCopyBuffer = content),
-                EckButton.Primary($"Write {fileName}", () =>
+            var row = KUILayout.Row(
+                KUIButton.Secondary("Copy", () => EditorGUIUtility.systemCopyBuffer = content),
+                KUIButton.Primary($"Write {fileName}", () =>
                 {
                     var path = CiTemplateGenerator.Write(m_Provider, m_Profile, m_Environment);
 
@@ -184,12 +184,12 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildTokenCard()
         {
-            var card = new EckCard(
+            var card = new KUICard(
                 "Tokens",
                 "Available in output paths, file names, shell commands, written files and notification messages.");
 
             foreach (var (token, description) in BuildTokens.Documentation)
-                card.Add(EckText.KeyValue(token, description));
+                card.Add(KUIText.KeyValue(token, description));
 
             return card;
         }

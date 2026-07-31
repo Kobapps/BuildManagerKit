@@ -13,7 +13,7 @@ namespace BuildManagerKit.Editor
     /// </summary>
     internal sealed class DashboardView : BuildManagerView
     {
-        private EckLogConsole m_Console;
+        private KUILogConsole m_Console;
 
         /// <inheritdoc />
         internal override string Title => "Dashboard";
@@ -21,7 +21,7 @@ namespace BuildManagerKit.Editor
         /// <inheritdoc />
         internal override VisualElement Build()
         {
-            var page = EckLayout.Page();
+            var page = KUILayout.Page();
 
             var health = BuildHealthCard();
             if (health != null)
@@ -61,29 +61,29 @@ namespace BuildManagerKit.Editor
             if (report.Issues.Count == 0)
                 return null;
 
-            var tone = report.HasErrors ? EckTone.Error : EckTone.Warning;
+            var tone = report.HasErrors ? KUITone.Error : KUITone.Warning;
 
-            var card = new EckCard(
+            var card = new KUICard(
                 report.HasErrors
                     ? $"{report.ErrorCount} project problem(s) will break builds"
                     : $"{report.WarningCount} project warning(s)",
                 null,
-                EckTheme.ColorOf(tone));
+                KUITheme.ColorOf(tone));
 
-            card.Header.Insert(0, new EckBadge(report.HasErrors ? "PROBLEMS" : "WARNINGS", tone));
-            card.WithHeaderAction(EckButton.Secondary("Re-check", () => Window.RefreshCurrentView()));
+            card.Header.Insert(0, new KUIBadge(report.HasErrors ? "PROBLEMS" : "WARNINGS", tone));
+            card.WithHeaderAction(KUIButton.Secondary("Re-check", () => Window.RefreshCurrentView()));
 
             // Cap the listing: a badly merged settings asset can produce a long tail of issues and
             // the dashboard is not the place to scroll through all of them.
             foreach (var issue in report.Issues.Take(6))
             {
-                var line = EckText.Muted((issue.IsError ? EckIcons.Bullet + " " : "◦ ") + issue);
+                var line = KUIText.Muted((issue.IsError ? KUIIcons.Bullet + " " : "◦ ") + issue);
                 line.style.marginLeft = 4;
                 card.Add(line);
             }
 
             if (report.Issues.Count > 6)
-                card.Add(EckText.Muted($"…and {report.Issues.Count - 6} more. "
+                card.Add(KUIText.Muted($"…and {report.Issues.Count - 6} more. "
                                        + "Tools ▸ Build Manager Kit ▸ Run Project Health Check."));
 
             return card;
@@ -93,7 +93,7 @@ namespace BuildManagerKit.Editor
         {
             var environment = Settings.ActiveEnvironment;
 
-            var card = new EckCard(
+            var card = new KUICard(
                 environment != null ? $"Environment · {environment.DisplayName}" : "Environment · none",
                 environment != null && !string.IsNullOrWhiteSpace(environment.Description)
                     ? environment.Description
@@ -107,31 +107,31 @@ namespace BuildManagerKit.Editor
                 var variables = ConfigResolver.ResolveVariables(Settings, environment);
                 var identifier = ConfigResolver.ResolveApplicationIdentifier(Settings, environment);
 
-                card.Add(EckText.KeyValue("Id", environment.Id));
-                card.Add(EckText.KeyValue("Defines", defines.Length > 0 ? string.Join("  ", defines) : "none"));
+                card.Add(KUIText.KeyValue("Id", environment.Id));
+                card.Add(KUIText.KeyValue("Defines", defines.Length > 0 ? string.Join("  ", defines) : "none"));
 
                 // Resolved rather than declared: what shipped code sees is the base environment's
                 // variables with this environment's on top.
-                card.Add(EckText.KeyValue("Runtime variables",
+                card.Add(KUIText.KeyValue("Runtime variables",
                     variables.Count > 0
                         ? string.Join(", ", variables.Select(variable => variable.key))
                         : "none"));
 
                 if (!string.IsNullOrEmpty(identifier))
-                    card.Add(EckText.KeyValue("Bundle id", identifier));
+                    card.Add(KUIText.KeyValue("Bundle id", identifier));
 
                 var inheritance = ConfigResolver.DescribeInheritance(Settings, environment);
                 if (!string.IsNullOrEmpty(inheritance))
-                    card.Add(EckText.Muted(inheritance));
+                    card.Add(KUIText.Muted(inheritance));
             }
 
-            var row = EckLayout.WrapRow();
+            var row = KUILayout.WrapRow();
             row.style.marginTop = 6;
 
             foreach (var candidate in Settings.GetSortedEnvironments())
             {
                 var captured = candidate;
-                var button = EckButton.Secondary(captured.DisplayName, () =>
+                var button = KUIButton.Secondary(captured.DisplayName, () =>
                 {
                     EnvironmentManager.Activate(captured, true);
                     Window.RefreshHeader();
@@ -150,7 +150,7 @@ namespace BuildManagerKit.Editor
 
             if (Settings.Environments.Count == 0)
             {
-                row.Add(EckButton.Primary("Create dev / stage / prod", () =>
+                row.Add(KUIButton.Primary("Create dev / stage / prod", () =>
                 {
                     BuildManagerBootstrap.CreateDefaultEnvironments();
                     Window.RefreshCurrentView();
@@ -165,7 +165,7 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildPlatformCard()
         {
             var active = EditorUserBuildSettings.activeBuildTarget;
-            var card = new EckCard(
+            var card = new KUICard(
                 $"Platform · {BuildTargetUtility.GetShortName(active)}",
                 "Switching platforms stores the settings of the one you are leaving and restores whatever "
                 + "was saved for the one you move to.");
@@ -175,20 +175,20 @@ namespace BuildManagerKit.Editor
                 image = BuildTargetIcons.Get(active, EditorUserBuildSettings.standaloneBuildSubtarget),
                 scaleMode = ScaleMode.ScaleToFit
             };
-            icon.AddToClassList(EckClass.ListItemIcon);
+            icon.AddToClassList(KUIClass.ListItemIcon);
 
             // Before the title rather than beside it: the icon is part of the heading, and the
             // header's action slot pushes whatever it is given to the far edge.
             card.Header.Insert(0, icon);
 
-            var row = EckLayout.WrapRow();
+            var row = KUILayout.WrapRow();
 
             foreach (var target in BuildTargetUtility.CommonTargets)
             {
                 var captured = target;
                 var installed = BuildTargetUtility.IsTargetInstalled(target);
 
-                var button = EckButton.WithIcon(
+                var button = KUIButton.WithIcon(
                     BuildTargetUtility.GetShortName(target),
                     BuildTargetIcons.Get(target),
                     () =>
@@ -210,11 +210,11 @@ namespace BuildManagerKit.Editor
         private VisualElement BuildBuildCard()
         {
             var profile = Window.SelectedProfile;
-            var card = new EckCard("Build");
+            var card = new KUICard("Build");
 
             if (profile == null)
             {
-                card.Add(new EckEmptyState(
+                card.Add(new KUIEmptyState(
                     "No build profiles yet",
                     "A profile says how to build one platform — target, scenes, output path and options.",
                     "Create a starter set of profiles",
@@ -233,16 +233,16 @@ namespace BuildManagerKit.Editor
             var git = GitInfo.Read();
             var versioning = ConfigResolver.ResolveVersioning(Settings, environment, profile);
 
-            card.Add(EckText.KeyValue("Profile", $"{profile.DisplayName} · {profile.Target}"));
-            card.Add(EckText.KeyValue("Environment",
+            card.Add(KUIText.KeyValue("Profile", $"{profile.DisplayName} · {profile.Target}"));
+            card.Add(KUIText.KeyValue("Environment",
                 environment != null ? environment.DisplayName : "none",
                 environment != null ? environment.Color : (Color?)null));
-            card.Add(EckText.KeyValue("Scenes", profile.ResolveScenePaths().Length.ToString()));
-            card.Add(EckText.KeyValue("Version",
+            card.Add(KUIText.KeyValue("Scenes", profile.ResolveScenePaths().Length.ToString()));
+            card.Add(KUIText.KeyValue("Version",
                 $"{VersionService.Resolve(versioning.Config, git, null)} "
                 + $"(build {VersionService.ResolveBuildNumber(versioning.Config, git)}) "
                 + $"· from {versioning.OwnerLabel}"));
-            card.Add(EckText.KeyValue("Output", preview));
+            card.Add(KUIText.KeyValue("Output", preview));
 
             var buildButton = BuildManagerUI.BuildSplitButton(
                 "Build " + profile.DisplayName,
@@ -253,15 +253,15 @@ namespace BuildManagerKit.Editor
             buildButton.style.marginLeft = 0;
             buildButton.style.marginRight = 4;
 
-            var runButton = EckButton.Secondary("Build and Run", () => Window.BuildSelected(false, true));
+            var runButton = KUIButton.Secondary("Build and Run", () => Window.BuildSelected(false, true));
             runButton.SetEnabled(!BuildRunner.IsRunning);
             runButton.tooltip = RunTooltip(profile);
 
-            var dryRun = EckButton.Secondary("Dry Run", () => Window.BuildSelected(true));
+            var dryRun = KUIButton.Secondary("Dry Run", () => Window.BuildSelected(true));
             dryRun.SetEnabled(!BuildRunner.IsRunning);
             dryRun.tooltip = "Resolve, validate and log everything without writing a player.";
 
-            var validate = EckButton.Secondary("Validate", () =>
+            var validate = KUIButton.Secondary("Validate", () =>
             {
                 var report = BuildRunner.Validate(profile, environment);
                 EditorUtility.DisplayDialog(
@@ -270,16 +270,16 @@ namespace BuildManagerKit.Editor
                     "OK");
             });
 
-            var edit = EckButton.Secondary("Edit Profile", () => BuildManagerWindow.Open("Profiles"));
+            var edit = KUIButton.Secondary("Edit Profile", () => BuildManagerWindow.Open("Profiles"));
 
-            var actions = EckLayout.WrapRow(buildButton, runButton, dryRun, validate, edit);
+            var actions = KUILayout.WrapRow(buildButton, runButton, dryRun, validate, edit);
             actions.style.marginTop = 8;
 
             card.Add(actions);
 
             // Next to the resolved path rather than in the toolbar: this is the answer to "where is
             // the build I just made", and the path above is the question.
-            card.Add(EckText.Link("Open output folder",
+            card.Add(KUIText.Link("Open output folder",
                 () => BuildManagerUI.RevealOutputFolder(profile, environment)));
 
             return card;
@@ -306,8 +306,8 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildConsoleCard()
         {
-            var card = new EckCard("Console");
-            m_Console = new EckLogConsole();
+            var card = new KUICard("Console");
+            m_Console = new KUILogConsole();
             m_Console.style.minHeight = 180;
 
             var current = BuildRunner.Current;
@@ -322,21 +322,21 @@ namespace BuildManagerKit.Editor
 
         private VisualElement BuildRecentCard()
         {
-            var card = new EckCard("Recent builds");
+            var card = new KUICard("Recent builds");
             var entries = BuildHistory.Entries.Take(5).ToArray();
 
             if (entries.Length == 0)
             {
-                card.Add(EckEmptyState.Line("Nothing built yet."));
+                card.Add(KUIEmptyState.Line("Nothing built yet."));
                 return card;
             }
 
             var list = new VisualElement();
-            list.AddToClassList(EckClass.List);
+            list.AddToClassList(KUIClass.List);
 
             foreach (var entry in entries)
             {
-                list.Add(new EckListRow(
+                list.Add(new KUIListRow(
                         $"{entry.result.profileName} · {entry.result.environmentId} · "
                         + $"{entry.result.version}+{entry.result.buildNumber} · "
                         + BuildTargetUtility.FormatDuration(TimeSpan.FromSeconds(entry.result.durationSeconds)))
@@ -346,7 +346,7 @@ namespace BuildManagerKit.Editor
 
             card.Add(list);
 
-            var openHistory = EckButton.Secondary("Open History", () => BuildManagerWindow.Open("History"));
+            var openHistory = KUIButton.Secondary("Open History", () => BuildManagerWindow.Open("History"));
             openHistory.style.marginTop = 6;
             openHistory.style.alignSelf = Align.FlexStart;
             card.Add(openHistory);

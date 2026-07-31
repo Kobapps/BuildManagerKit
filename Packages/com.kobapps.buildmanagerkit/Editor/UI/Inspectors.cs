@@ -28,19 +28,19 @@ namespace BuildManagerKit.Editor
 
             var profile = (BuildTargetProfile)target;
 
-            root.Add(EckLayout.WrapRow(
-                EckButton.Primary("Build", () =>
+            root.Add(KUILayout.WrapRow(
+                KUIButton.Primary("Build", () =>
                     BuildManagerWindow.Open().BuildProfile(profile, BuildManagerSettings.Instance.ActiveEnvironment,
                         false)),
-                EckButton.Secondary("Build and Run", () =>
+                KUIButton.Secondary("Build and Run", () =>
                         BuildManagerWindow.Open().BuildProfile(profile,
                             BuildManagerSettings.Instance.ActiveEnvironment, false, true))
                     .Tip("Build, then launch the player — on the connected device for a mobile target."),
-                EckButton.Secondary("Open Output Folder",
+                KUIButton.Secondary("Open Output Folder",
                     () => BuildManagerUI.RevealOutputFolder(profile)),
-                EckButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Profiles"))));
+                KUIButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Profiles"))));
 
-            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            KUIProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_PreBuildSteps", BuildStepScope.PreBuild,
                 "Pre build actions", null, BuildStepScopeLevel.Profile));
@@ -72,11 +72,11 @@ namespace BuildManagerKit.Editor
 
             var environment = (BuildEnvironment)target;
 
-            root.Add(EckLayout.Row(
-                EckButton.Primary("Make Active", () => EnvironmentManager.Activate(environment, true)),
-                EckButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Environments"))));
+            root.Add(KUILayout.Row(
+                KUIButton.Primary("Make Active", () => EnvironmentManager.Activate(environment, true)),
+                KUIButton.Secondary("Open Build Manager", () => BuildManagerWindow.Open("Environments"))));
 
-            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            KUIProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_OnActivateSteps", BuildStepScope.EnvironmentActivate,
                 "On activate actions", null, BuildStepScopeLevel.Environment));
@@ -108,9 +108,9 @@ namespace BuildManagerKit.Editor
             var root = new VisualElement();
             BuildManagerUI.ApplyStyles(root);
 
-            root.Add(EckButton.Primary("Open Build Manager", () => BuildManagerWindow.Open()));
+            root.Add(KUIButton.Primary("Open Build Manager", () => BuildManagerWindow.Open()));
 
-            EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
+            KUIProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, k_Hidden);
 
             root.Add(new StepListView(serializedObject, "m_GlobalOnActivateSteps",
                 BuildStepScope.EnvironmentActivate, "Global on activate actions"));
@@ -150,19 +150,19 @@ namespace BuildManagerKit.Editor
                     var settings = BuildManagerSettings.Instance;
                     var serializedObject = new SerializedObject(settings);
 
-                    var open = EckButton.Primary("Open Build Manager", () => BuildManagerWindow.Open());
+                    var open = KUIButton.Primary("Open Build Manager", () => BuildManagerWindow.Open());
                     open.style.alignSelf = Align.FlexStart;
                     root.Add(open);
 
                     var active = settings.ActiveEnvironment;
-                    root.Add(EckText.KeyValue("Active environment",
+                    root.Add(KUIText.KeyValue("Active environment",
                         active != null ? active.DisplayName : "none"));
-                    root.Add(EckText.KeyValue("Profiles", settings.Profiles.Count.ToString()));
-                    root.Add(EckText.KeyValue("Environments", settings.Environments.Count.ToString()));
-                    root.Add(EckLayout.Separator());
+                    root.Add(KUIText.KeyValue("Profiles", settings.Profiles.Count.ToString()));
+                    root.Add(KUIText.KeyValue("Environments", settings.Environments.Count.ToString()));
+                    root.Add(KUILayout.Separator());
 
                     var hidden = new HashSet<string> { "m_Script" };
-                    EckProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, hidden);
+                    KUIProperty.DrawChildren(root, serializedObject.GetIterator(), serializedObject, hidden);
 
                     root.Bind(serializedObject);
                 }
