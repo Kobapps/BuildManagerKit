@@ -82,7 +82,6 @@ namespace BuildManagerKit.Editor
             page.Add(postCard);
 
             page.Add(BuildAgentSkillCard());
-            page.Add(BuildAppearanceCard());
             page.Add(BuildExtensionCard());
             page.Add(BuildRuntimeCard());
 
@@ -146,27 +145,6 @@ namespace BuildManagerKit.Editor
             row.style.marginTop = 6;
             card.Add(row);
 
-            return card;
-        }
-
-        /// <summary>
-        /// The theme picker, embedded rather than linked: the window's appearance is an
-        /// EditorCoreKit-wide preference, and someone looking for it will look here first.
-        /// </summary>
-        private VisualElement BuildAppearanceCard()
-        {
-            var card = new KUICard(
-                "Appearance",
-                "This window is built on EditorCoreKit, so its theme and density are the ones every tool "
-                + "built on the kit shares. Changing either restyles all of them live.");
-
-            // The picker is built to fill a Preferences pane, so it is given a height here rather
-            // than being left to grow inside a page that is already scrolling.
-            var picker = new KUIThemeSettingsView(compact: true);
-            picker.style.flexGrow = 0;
-            picker.style.height = 260;
-
-            card.Add(picker);
             return card;
         }
 

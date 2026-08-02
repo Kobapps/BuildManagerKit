@@ -701,6 +701,10 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
                     variables = ConfigResolver.ResolveVariables(settings, environment)
                         .Select(variable => variable.key + "=" + variable.value).ToArray(),
                     configKeys = environment.ConfigAssets.Select(entry => entry.key).ToArray(),
+                    configs = environment.Configs
+                        .Where(config => config != null)
+                        .Select(config => $"{config.ConfigKey}={config.GetType().Name} ({AssetDatabase.GetAssetPath(config)})")
+                        .ToArray(),
                     actionCounts = $"onActivate={environment.OnActivateSteps.Count}, "
                                    + $"preBuild={environment.PreBuildSteps.Count}, "
                                    + $"postBuild={environment.PostBuildSteps.Count}"
@@ -1062,6 +1066,14 @@ Exit codes: 0 success · 1 health check failed · 2 usage error");
             public string[] variables = Array.Empty<string>();
 
             public string[] configKeys = Array.Empty<string>();
+
+            /// <summary>
+            /// Typed configs this environment publishes, as <c>key=Type (path)</c>. An agent reading
+            /// this needs the path: sharing a config with another environment means referencing the
+            /// same asset, not creating a second one.
+            /// </summary>
+            public string[] configs = Array.Empty<string>();
+
             public string actionCounts;
         }
 

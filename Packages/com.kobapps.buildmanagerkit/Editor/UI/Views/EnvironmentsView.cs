@@ -17,6 +17,7 @@ namespace BuildManagerKit.Editor
         private static readonly HashSet<string> k_HiddenFields = new HashSet<string>
         {
             "m_Script",
+            "m_Configs",
             "m_ProductName",
             "m_CompanyName",
             "m_ApplicationIdentifier",
@@ -440,6 +441,7 @@ namespace BuildManagerKit.Editor
             detail.Add(BuildCommonConfigCard(serializedObject));
             detail.Add(BuildVersioningCard(serializedObject));
             detail.Add(BuildApplicationIconCard(serializedObject));
+            detail.Add(BuildConfigsCard());
             detail.Add(BuildPublishedAssetsCard());
             detail.Add(BuildGlobalActionsBanner());
 
@@ -725,6 +727,265 @@ namespace BuildManagerKit.Editor
         }
 
         /// <summary>
+        /// The typed configs this environment publishes, each one editable in place.
+        ///
+        /// Inline rather than "select the asset and edit it in the Inspector": the reason to open
+        /// this window is to compare flavours, and that falls apart the moment answering "what is
+        /// different about staging" means clicking through to three other assets. Each card folds
+        /// away, so a long list still reads as a list.
+        ///
+        /// The header of every card says how many environments publish the same asset, because
+        /// editing a shared config changes all of them and that is not visible from the fields.
+        /// </summary>
+        private VisualElement BuildConfigsCard()
+        {
+            var card = new KUICard(
+                "Configs",
+                "Typed configuration assets this environment publishes. Runtime code reads them with "
+                + "EnvironmentConfigs.Get<YourConfig>() — the type is the address, so there is no key to "
+                + "keep in sync. List the same asset in several environments to share it.");
+
+            card.WithHeaderAction(KUIButton.Secondary(KUIIcons.Plus + " Add", ShowAddConfigMenu)
+                .Tip("Publish an existing config asset from this environment, or create a new one."));
+
+            var configs = m_Selected.Configs;
+
+            for (var i = 0; i < configs.Count; i++)
+            {
+                var config = configs[i];
+                card.Add(config != null ? BuildConfigCard(config) : BuildMissingConfigRow(i));
+            }
+
+            if (configs.Count == 0)
+            {
+                card.Add(KUIEmptyState.Line(
+                    "No configs yet. Add one to give this environment its own tuning values, endpoints or "
+                    + "feature flags — readable at runtime without a magic string."));
+            }
+
+            var drop = new KUIDropZone(
+                "Drop config assets here to publish them from this environment",
+                assets =>
+                {
+                    var added = assets.OfType<EnvironmentConfig>()
+                        .Count(config => EnvironmentConfigCatalog.Attach(m_Selected, config));
+
+                    if (added > 0)
+                        Window.RefreshCurrentView();
+                },
+                typeof(EnvironmentConfig));
+
+            drop.style.marginTop = 8;
+            card.Add(drop);
+
+            if (EnvironmentConfigCatalog.ConfigTypes.Count == 0)
+            {
+                card.Add(KUIText.Muted(
+                    "This project defines no config types yet. Derive a ScriptableObject from "
+                    + "BuildManagerKit.EnvironmentConfig and it appears in the Add menu."));
+
+                card.Add(KUIText.Code(
+                    "public sealed class Endpoints : EnvironmentConfig { public string baseUrl; }"));
+            }
+
+            return card;
+        }
+
+        /// <summary>
+        /// One config, folded away behind a header that says what it is and who else publishes it.
+        /// The body is the asset's own inspector, so custom drawers and attributes keep working.
+        /// </summary>
+        private VisualElement BuildConfigCard(EnvironmentConfig config)
+        {
+            var sharedWith = EnvironmentConfigCatalog.UsedBy(config, Settings)
+                .Where(environment => environment != m_Selected)
+                .ToList();
+
+            var card = new KUIExpandableCard(config.name, EnvironmentConfigCatalog.Describe(config))
+                .WithTag(config.ConfigKey, KUITone.Accent,
+                    config.HasExplicitKey
+                        ? "The key this config is published under, set on the asset."
+                        : "The key this config is published under, taken from its type name.");
+
+            if (sharedWith.Count > 0)
+            {
+                var badge = new KUIBadge($"SHARED ×{sharedWith.Count + 1}")
+                {
+                    tooltip = "Also published by " + string.Join(", ", sharedWith.Select(e => e.DisplayName))
+                              + ". Editing the fields below changes it for all of them."
+                };
+
+                card.WithHeaderAction(badge);
+            }
+
+            card.WithOverflowMenu(menu =>
+            {
+                menu.Item("Ping Asset", () => EditorGUIUtility.PingObject(config));
+                menu.Item("Open in Inspector", () => Selection.activeObject = config);
+                menu.Separator();
+
+                foreach (var environment in Settings.GetSortedEnvironments())
+                {
+                    if (environment == null || environment == m_Selected)
+                        continue;
+
+                    var captured = environment;
+                    var published = environment.Configs.Contains(config);
+
+                    menu.Item($"Also publish from/{environment.DisplayName}", () =>
+                    {
+                        if (published)
+                            EnvironmentConfigCatalog.Detach(captured, config);
+                        else
+                            EnvironmentConfigCatalog.Attach(captured, config);
+
+                        Window.RefreshCurrentView();
+                    }, on: published);
+                }
+
+                menu.Separator();
+
+                menu.Item("Remove From This Environment", () =>
+                {
+                    if (EnvironmentConfigCatalog.Detach(m_Selected, config))
+                        Window.RefreshCurrentView();
+                });
+
+                menu.Item("Delete Asset…", () => DeleteConfig(config, sharedWith));
+            });
+
+            // A real InspectorElement rather than a loop of PropertyFields: it brings the asset's own
+            // custom editor and property drawers with it, and — the part that matters here — it owns
+            // its binding. A plain field list would be re-bound to the *environment* when BuildDetail
+            // binds the page, and every field would quietly stop working.
+            var inspector = new InspectorElement(config);
+            inspector.style.marginTop = 2;
+            card.Add(inspector);
+
+            // The script row is noise on a card whose header already says the type. Deferred because
+            // the inspector fills itself in asynchronously.
+            inspector.schedule.Execute(() =>
+            {
+                var script = inspector.Q<PropertyField>("PropertyField:m_Script");
+                if (script != null)
+                    script.style.display = DisplayStyle.None;
+            });
+
+            card.Add(KUIText.Code($"EnvironmentConfigs.Get<{config.GetType().Name}>()"));
+
+            return card;
+        }
+
+        /// <summary>An empty slot in the list, shown so it can be cleared rather than puzzled over.</summary>
+        private VisualElement BuildMissingConfigRow(int index)
+        {
+            var row = new KUIListRow("(empty config slot)");
+            row.style.opacity = 0.6f;
+            row.tooltip = "This slot is empty — probably a deleted asset. It publishes nothing.";
+
+            row.WithAction(KUIButton.Secondary("Remove", () =>
+            {
+                Undo.RecordObject(m_Selected, "Remove Config");
+                m_Selected.ConfigsMutable.RemoveAt(index);
+                EditorUtility.SetDirty(m_Selected);
+                AssetDatabase.SaveAssetIfDirty(m_Selected);
+                Window.RefreshCurrentView();
+            }));
+
+            return row;
+        }
+
+        /// <summary>
+        /// The Add menu: assets another environment already publishes first, because sharing one is
+        /// almost always what is wanted and duplicating it by hand is the mistake this saves.
+        /// </summary>
+        private void ShowAddConfigMenu()
+        {
+            var menu = KUIMenu.New();
+
+            var elsewhere = EnvironmentConfigCatalog.PublishedElsewhere(m_Selected, Settings);
+
+            foreach (var config in elsewhere)
+            {
+                var captured = config;
+                var owners = EnvironmentConfigCatalog.UsedBy(config, Settings);
+
+                menu.Item($"Share from another environment/{config.name}  ({string.Join(", ", owners.Select(e => e.Id))})",
+                    () =>
+                    {
+                        EnvironmentConfigCatalog.Attach(m_Selected, captured);
+                        Window.RefreshCurrentView();
+                    });
+            }
+
+            var unused = EnvironmentConfigCatalog.FindAll()
+                .Where(config => !m_Selected.Configs.Contains(config) && !elsewhere.Contains(config))
+                .ToList();
+
+            foreach (var config in unused)
+            {
+                var captured = config;
+
+                menu.Item($"Existing asset/{config.name}  ({config.GetType().Name})", () =>
+                {
+                    EnvironmentConfigCatalog.Attach(m_Selected, captured);
+                    Window.RefreshCurrentView();
+                });
+            }
+
+            if (elsewhere.Count > 0 || unused.Count > 0)
+                menu.Separator();
+
+            var types = EnvironmentConfigCatalog.ConfigTypes;
+
+            if (types.Count == 0)
+            {
+                menu.Disabled("No config types defined — derive one from EnvironmentConfig");
+            }
+            else
+            {
+                foreach (var type in types)
+                {
+                    var captured = type;
+
+                    menu.Item($"New/{type.Name}", () =>
+                    {
+                        EnvironmentConfigCatalog.Create(captured, m_Selected, m_Selected.Id);
+                        Window.RefreshCurrentView();
+                    });
+                }
+            }
+
+            menu.ShowAtCursor();
+        }
+
+        /// <summary>
+        /// Deletes a config asset, spelling out which other environments lose it. Deleting one that
+        /// three environments publish is a much bigger change than the button suggests.
+        /// </summary>
+        private void DeleteConfig(EnvironmentConfig config, IReadOnlyList<BuildEnvironment> sharedWith)
+        {
+            var path = AssetDatabase.GetAssetPath(config);
+
+            var message = $"Delete the config asset '{config.name}'?\n\n{path} is deleted and removed from "
+                          + "this environment"
+                          + (sharedWith.Count > 0
+                              ? $" and from {string.Join(", ", sharedWith.Select(e => "'" + e.DisplayName + "'"))}, "
+                                + "which publish it too."
+                              : ".")
+                          + "\n\nThis cannot be undone.";
+
+            if (!EditorUtility.DisplayDialog("Delete config", message, "Delete", "Cancel"))
+                return;
+
+            foreach (var environment in EnvironmentConfigCatalog.UsedBy(config, Settings).ToList())
+                EnvironmentConfigCatalog.Detach(environment, config);
+
+            AssetDatabase.DeleteAsset(path);
+            Window.RefreshCurrentView();
+        }
+
+        /// <summary>
         /// The config assets this environment actually publishes: the project-wide defaults with
         /// its own entries layered on top. Shows which key comes from where, because "why is
         /// Get&lt;T&gt; returning the wrong asset" is otherwise a guessing game.
@@ -734,38 +995,49 @@ namespace BuildManagerKit.Editor
             var resolved = EnvironmentAssetsWriter.Resolve(m_Selected, Settings);
 
             var card = new KUICard(
-                "Published config assets",
-                "Readable at runtime with EnvironmentAssets.Current.Get<T>(key). Only these assets are "
-                + "referenced by the generated Resources asset, so the other environments' assets stay out "
-                + "of the player.");
+                "Everything published to the player",
+                "The whole set this environment bakes into Resources: the configs above, the project-wide "
+                + "defaults, and any key/asset pairs. Only these assets are referenced, so the other "
+                + "environments' assets stay out of the player.");
 
             if (resolved.Count == 0)
             {
                 card.Add(KUIEmptyState.Line(
-                    "None yet. Add key/asset pairs under Config Assets above, or set project-wide defaults "
-                    + "in the Settings tab."));
+                    "Nothing yet. Add a config above, add key/asset pairs under Config Assets, or set "
+                    + "project-wide defaults in the Settings tab."));
 
                 return card;
             }
 
             foreach (var entry in resolved)
             {
-                var ownEntry = m_Selected.GetConfigAsset(entry.key) != null;
+                var isConfig = entry.asset is EnvironmentConfig;
+                var ownEntry = isConfig || m_Selected.GetConfigAsset(entry.key) != null;
                 var typeName = entry.asset != null ? entry.asset.GetType().Name : "missing";
 
-                var row = KUIText.KeyValue(
-                    entry.key,
-                    $"{entry.asset.name}  ({typeName})" + (ownEntry ? string.Empty : "  · inherited default"));
+                var origin = isConfig
+                    ? "  · config"
+                    : ownEntry
+                        ? string.Empty
+                        : "  · inherited default";
 
-                row.tooltip = ownEntry
-                    ? "Declared by this environment."
-                    : "Inherited from the project-wide defaults. Add the same key here to override it.";
+                var row = KUIText.KeyValue(entry.key, $"{entry.asset.name}  ({typeName}){origin}");
+
+                row.tooltip = isConfig
+                    ? $"A typed config. Read it with EnvironmentConfigs.Get<{typeName}>()."
+                    : ownEntry
+                        ? "Declared by this environment."
+                        : "Inherited from the project-wide defaults. Add the same key here to override it.";
 
                 card.Add(row);
             }
 
-            var usage = KUIText.Code(
-                $"var asset = EnvironmentAssets.Current.Get<YourType>(\"{resolved[0].key}\");");
+            var first = resolved[0];
+
+            var usage = KUIText.Code(first.asset is EnvironmentConfig
+                ? $"var config = EnvironmentConfigs.Get<{first.asset.GetType().Name}>();"
+                : $"var asset = EnvironmentAssets.Current.Get<YourType>(\"{first.key}\");");
+
             usage.style.marginTop = 6;
             card.Add(usage);
 

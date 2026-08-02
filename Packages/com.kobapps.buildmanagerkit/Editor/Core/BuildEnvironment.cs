@@ -84,6 +84,13 @@ namespace BuildManagerKit.Editor
                  + "Merged over the base environment's variables, so a shared value is declared once there.")]
         [SerializeField] private List<BuildVariable> m_Variables = new List<BuildVariable>();
 
+        [Header("Configs")]
+        [Tooltip("Typed configuration assets this environment publishes. Read them at runtime with "
+                 + "EnvironmentConfigs.Get<YourConfig>() — no key, the type is the address. The same asset "
+                 + "can be listed by several environments, which is how a shared value is edited in one "
+                 + "place.")]
+        [SerializeField] private List<EnvironmentConfig> m_Configs = new List<EnvironmentConfig>();
+
         [Header("Config Assets")]
         [Tooltip("Assets this environment publishes to runtime code — a tuning ScriptableObject, a JSON "
                  + "TextAsset, an image. Read them with EnvironmentAssets.Current.Get<T>(key). Only the "
@@ -159,10 +166,49 @@ namespace BuildManagerKit.Editor
         public IReadOnlyList<BuildVariable> Variables => m_Variables;
 
         /// <summary>
+        /// Typed configs this environment publishes, read at runtime with
+        /// <see cref="EnvironmentConfigs.Get{T}()"/>.
+        ///
+        /// Nothing stops an asset appearing in several environments' lists, and that is the intended
+        /// way to share one: a config listed by dev and stage but not prod is edited once and takes
+        /// effect in both, while prod publishes its own or none at all.
+        /// </summary>
+        public IReadOnlyList<EnvironmentConfig> Configs => m_Configs;
+
+        /// <summary>
         /// Assets this environment publishes, read at runtime through
         /// <see cref="EnvironmentAssets"/>. Overrides any project-wide default sharing a key.
         /// </summary>
         public IReadOnlyList<EnvironmentAssetEntry> ConfigAssets => m_ConfigAssets;
+
+        /// <summary>
+        /// The config of type <typeparamref name="T"/> this environment publishes, or null.
+        ///
+        /// The Editor-side mirror of <see cref="EnvironmentConfigs.Get{T}()"/>: it reads the
+        /// environment asset directly, so it answers for any environment rather than only the one
+        /// baked into the player.
+        /// </summary>
+        /// <typeparam name="T">The config type.</typeparam>
+        public T GetConfig<T>() where T : EnvironmentConfig
+        {
+            T assignable = null;
+
+            foreach (var config in m_Configs)
+            {
+                if (config == null)
+                    continue;
+
+                if (config.GetType() == typeof(T))
+                    return config as T;
+
+                // Remembered rather than returned: an exact match later in the list is the better
+                // answer, and the list is short enough that finishing it costs nothing.
+                if (assignable == null && config is T candidate)
+                    assignable = candidate;
+            }
+
+            return assignable;
+        }
 
         /// <summary>The asset published under <paramref name="key"/>, or null.</summary>
         public UnityEngine.Object GetConfigAsset(string key)
@@ -234,6 +280,7 @@ namespace BuildManagerKit.Editor
             return fallback;
         }
 
+        internal List<EnvironmentConfig> ConfigsMutable => m_Configs;
         internal List<BuildStep> OnActivateStepsMutable => m_OnActivateSteps;
         internal List<BuildStep> PreBuildStepsMutable => m_PreBuildSteps;
         internal List<BuildStep> PostBuildStepsMutable => m_PostBuildSteps;
@@ -288,6 +335,7 @@ namespace BuildManagerKit.Editor
         {
             m_Versioning ??= new VersioningConfig();
             m_Variables ??= new List<BuildVariable>();
+            m_Configs ??= new List<EnvironmentConfig>();
             m_ConfigAssets ??= new List<EnvironmentAssetEntry>();
             m_OnActivateSteps ??= new List<BuildStep>();
             m_PreBuildSteps ??= new List<BuildStep>();

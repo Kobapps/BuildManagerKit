@@ -83,7 +83,7 @@ delete anything you do not want.
 | Concept | What it is |
 | --- | --- |
 | **Profile** (`BuildTargetProfile`) | *How* to build one platform: target, scenes, output path, scripting backend, IL2CPP configuration, stripping, compression, signing, build options. |
-| **Environment** (`BuildEnvironment`) | *Which flavour* to build: scripting defines, and the differences from the common configuration — product name, bundle identifier, application icon, runtime variables, versioning — plus per-environment config assets. A field left empty takes the common value. |
+| **Environment** (`BuildEnvironment`) | *Which flavour* to build: scripting defines, and the differences from the common configuration — product name, bundle identifier, application icon, runtime variables, versioning — plus the configs and config assets it publishes to runtime code. A field left empty takes the common value. |
 | **Action** (`BuildStep`) | A unit of work that runs before or after the player build. |
 | **Queue** (`BuildQueue`) | An ordered list of profiles built back to back. |
 | **Settings** (`BuildManagerSettings`) | The project-wide catalogue, the global action lists and the behaviour toggles. |
@@ -169,7 +169,7 @@ one, so it sits in its own section rather than inside the reorderable list.
 | --- | --- |
 | Product name, company name, bundle identifier | Scripting defines — each environment lists its own, and they may overlap |
 | Application icon, force development build | The generated `ENV_<ID>` define, which is what identifies the environment |
-| Shared runtime variables, merged by key | Published config assets — shared ones go in *Global Config Assets* on the Settings tab |
+| Shared runtime variables, merged by key | Published configs and config assets — list one asset on several environments to share it, or put it in *Global Config Assets* on the Settings tab to give it to all of them |
 | Versioning | Actions — shared work belongs in the global action lists |
 
 **There is no "override" checkbox.** An environment's field shows the shared value greyed out while it
@@ -190,10 +190,60 @@ is authoritative and every switcher reads it — the main toolbar dropdown, the 
 menu, the dashboard buttons, `BuildCLI.List` and the order `⌘⇧E` cycles through. Reordering is
 undoable, and `BuildManagerSettings.MoveEnvironment(from, to)` does the same thing from a script.
 
+### Per-environment configs
+
+The typed way to give an environment its own settings. Derive a `ScriptableObject` from
+`EnvironmentConfig`, list the asset on the environments that should publish it, and read it at
+runtime with no key at all — the type *is* the address:
+
+```csharp
+using BuildManagerKit;
+
+// Your config. Ordinary ScriptableObject; ordinary fields, attributes and custom drawers.
+public sealed class Endpoints : EnvironmentConfig
+{
+    public string baseUrl = "https://api.example.com";
+    public float timeoutSeconds = 10f;
+
+    // Optional: the one-liner shown beside the asset in the Build Manager window.
+    public override string Summary => baseUrl;
+}
+
+// Anywhere in shipped code — no key, no Resources.Load, no wiring.
+var endpoints = EnvironmentConfigs.Get<Endpoints>();
+
+// Optional configs, for something only some flavours publish.
+if (EnvironmentConfigs.TryGet<DebugOverlayConfig>(out var overlay))
+    ShowOverlay(overlay);
+
+// Mandatory ones: fails naming the type and the environment, not with a null reference later.
+var tuning = EnvironmentConfigs.Require<TuningConfig>();
+```
+
+Full API: `Get<T>` · `TryGet<T>` · `Has<T>` · `GetOrDefault<T>` · `GetOrCreate<T>` · `Require<T>` ·
+`Get<T>(key)` · `All` · `EnvironmentId`. Lookup is by type, so an exact match wins and asking for a
+base class returns whichever subclass the environment publishes.
+
+**Sharing one config between environments.** List the same asset on each environment that should
+use it. There is one asset, so it is edited once and every environment listing it picks the change
+up; an environment that needs different values gets its own asset instead. The Build Manager window
+marks a shared config `SHARED ×n`, names the other environments in its tooltip, and its ⋮ menu adds
+or removes it from any of them in one click.
+
+**Editing them.** The Environments tab draws each config's own inspector inline, folded away behind
+a one-line summary — so comparing dev against prod does not mean clicking through to three separate
+assets. New configs are created from the same **Add** menu, which also lists every config another
+environment already publishes.
+
+By default a config is published under its type name. Override **Config key** on the asset only when
+one environment publishes two configs of the same type; the health check flags the collision if you
+forget.
+
 ### Per-environment config assets
 
-Beyond strings, an environment can publish whole **assets** — a tuning `ScriptableObject`, a JSON
-`TextAsset`, a splash image, an audio bank — under keys that runtime code looks up:
+The untyped alternative, and what to use for assets you do not own the class of. An environment can
+publish any **asset** — a tuning `ScriptableObject`, a JSON `TextAsset`, a splash image, an audio
+bank — under keys that runtime code looks up:
 
 ```csharp
 using BuildManagerKit;
@@ -227,8 +277,13 @@ the settings asset; an environment listing the same key overrides the default �
 the global action lists. The Environments tab shows the resolved set and marks which keys are
 inherited.
 
+**Precedence**, lowest to highest: global config assets → the environment's configs → the
+environment's own keyed entries. So a keyed entry can override a config by name if you ever need it
+to, and a config never loses to a project-wide default it knows nothing about.
+
 The health check warns when a key is published by some environments but not others, because that
-is a `null` that only appears in one flavour's build.
+is a `null` that only appears in one flavour's build. This covers configs too: a `TuningConfig` on
+`dev` but not on `prod` is reported before it becomes a null reference in a release build.
 
 ## Reading the environment at runtime
 

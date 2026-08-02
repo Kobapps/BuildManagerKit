@@ -59,6 +59,7 @@ namespace BuildManagerKit
 
         private static EnvironmentAssets s_Current;
         private Dictionary<string, UnityEngine.Object> m_Lookup;
+        private Dictionary<Type, EnvironmentConfig> m_ConfigLookup;
 
         /// <summary>
         /// The set baked for the running player. Never null: a project that has not generated one
@@ -190,6 +191,69 @@ namespace BuildManagerKit
         /// <summary>A published ScriptableObject of the given type, or null.</summary>
         public T GetConfig<T>(string key) where T : ScriptableObject => Get<T>(key);
 
+        /// <summary>
+        /// Every published <see cref="EnvironmentConfig"/>, in the order the environment lists them.
+        /// The plain keyed assets — textures, TextAssets, ScriptableObjects that do not derive from
+        /// <see cref="EnvironmentConfig"/> — are not included; read those with <see cref="Get{T}"/>.
+        /// </summary>
+        public IEnumerable<EnvironmentConfig> Configs
+        {
+            get
+            {
+                foreach (var entry in m_Entries)
+                {
+                    if (entry.asset is EnvironmentConfig config && config != null)
+                        yield return config;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The published config of type <typeparamref name="T"/>, or null when this environment does
+        /// not publish one.
+        ///
+        /// Resolved by type rather than by key, so it keeps working when an asset overrides its
+        /// <see cref="EnvironmentConfig.ConfigKey"/>. An exact type match wins; failing that the
+        /// first assignable config is returned, which is what makes asking for a base class work
+        /// when each environment publishes a different subclass.
+        /// </summary>
+        /// <typeparam name="T">The config type to look for.</typeparam>
+        public T GetConfig<T>() where T : EnvironmentConfig
+        {
+            if (m_ConfigLookup == null)
+            {
+                m_ConfigLookup = new Dictionary<Type, EnvironmentConfig>();
+
+                foreach (var entry in m_Entries)
+                {
+                    // Exact type only: a subclass must not claim its base's slot, or the assignable
+                    // scan below would never get the chance to pick between two of them.
+                    if (entry.asset is EnvironmentConfig config && config != null)
+                        m_ConfigLookup.TryAdd(config.GetType(), config);
+                }
+            }
+
+            if (m_ConfigLookup.TryGetValue(typeof(T), out var exact))
+                return (T)exact;
+
+            foreach (var candidate in m_ConfigLookup.Values)
+            {
+                if (candidate is T assignable)
+                    return assignable;
+            }
+
+            return null;
+        }
+
+        /// <summary>Non-throwing variant of <see cref="GetConfig{T}()"/>.</summary>
+        /// <typeparam name="T">The config type to look for.</typeparam>
+        /// <param name="config">The published config, or null.</param>
+        public bool TryGetConfig<T>(out T config) where T : EnvironmentConfig
+        {
+            config = GetConfig<T>();
+            return config != null;
+        }
+
         private UnityEngine.Object Lookup(string key)
         {
             if (string.IsNullOrEmpty(key))
@@ -209,12 +273,16 @@ namespace BuildManagerKit
             return m_Lookup.TryGetValue(key, out var asset) ? asset : null;
         }
 
-        internal void InvalidateLookup() => m_Lookup = null;
+        internal void InvalidateLookup()
+        {
+            m_Lookup = null;
+            m_ConfigLookup = null;
+        }
 
         private void OnEnable()
         {
             m_Entries ??= new List<EnvironmentAssetEntry>();
-            m_Lookup = null;
+            InvalidateLookup();
         }
 
         /// <inheritdoc />

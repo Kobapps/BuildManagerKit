@@ -1,6 +1,6 @@
 {
   "name": "com.kobapps.buildmanagerkit",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "displayName": "BuildManagerKit",
   "description": "AAA-quality build pipeline, environment management and CI/CD automation for Unity 6. Reusable per-platform build profiles, first-class dev/stage/prod environments that also apply to the Editor, per-environment defines, identifiers, app icons and config assets, an extensible drag-and-drop pre/post build action system, build queues that survive domain reloads, a searchable build history, and a command line that exposes every build option so CI runs exactly the same pipeline as the button in the window.",
   "unity": "6000.0",

@@ -1,6 +1,6 @@
 ---
 name: buildmanagerkit
-description: Manage Unity build environments, per-environment config assets, build profiles and builds in a project using BuildManagerKit. Use when asked to add or change an environment (dev/stage/prod/qa), set scripting defines or bundle identifiers per environment, publish config assets or JSON per environment, switch the active environment, run or debug a build, or wire BuildManagerKit into CI.
+description: Manage Unity build environments, per-environment config assets, build profiles and builds in a project using BuildManagerKit. Use when asked to add or change an environment (dev/stage/prod/qa), set scripting defines or bundle identifiers per environment, publish configs, config assets or JSON per environment, share a config between environments, switch the active environment, run or debug a build, or wire BuildManagerKit into CI.
 ---
 
 # BuildManagerKit
@@ -139,9 +139,38 @@ Versioning lives in the common configuration by default, and both halves are opt
   for the shared one — and `Describe` reports which. A build number passed to `BuildCLI.Build` with
   `-bmkBuildNumber` is used as-is and leaves the counter alone.
 
-## Per-environment config assets
+## Per-environment configs (typed)
 
-An environment publishes assets under string keys. The build bakes only the active environment's
+The preferred shape when the project owns the class. A `ScriptableObject` deriving from
+`EnvironmentConfig` is listed on the environments that publish it and read back by type:
+
+```csharp
+using BuildManagerKit;
+
+public sealed class Endpoints : EnvironmentConfig { public string baseUrl; }
+
+var endpoints = EnvironmentConfigs.Get<Endpoints>();          // null when not published
+var tuning    = EnvironmentConfigs.Require<TuningConfig>();   // throws, naming type + environment
+if (EnvironmentConfigs.TryGet<DebugOverlayConfig>(out var overlay)) ShowOverlay(overlay);
+```
+
+The key is the type name, so nothing has to be kept in sync. Only override **Config key** on the
+asset when one environment publishes two configs of the same type.
+
+**To share a config between environments, reference the same asset from each one** — do not create a
+copy per environment, or they stop tracking each other. `-bmkDescribe` lists each environment's
+configs as `key=Type (path)`; use that path to attach the existing asset. In the Editor,
+`EnvironmentConfigCatalog.Attach(environment, config)` / `.Detach(...)` do it from a script, and the
+window's ⋮ menu on a config does it in one click.
+
+Give an environment *different* values by pointing it at its own asset of the same type. Publishing
+a config from some environments and not others is a warning in the health check, because
+`Get<T>()` then returns null only in those builds.
+
+## Per-environment config assets (keyed)
+
+For assets whose class the project does not own — a `TextAsset` of JSON, a texture, an audio clip.
+An environment publishes them under string keys. The build bakes only the active environment's
 list into `Assets/Resources/BuildManagerKit/EnvironmentAssets.asset`, so the other environments'
 assets never reach the player.
 
@@ -166,8 +195,12 @@ if (BuildInfo.Current.IsEnvironment("prod"))
     Analytics.Enable();
 ```
 
-Use `EnvironmentAssets` for assets, `BuildInfo` variables for short strings. Both are generated
-on build *and* on Editor environment switch, so play mode matches the player.
+Use `EnvironmentConfigs` for typed configuration, `EnvironmentAssets` for other assets, and
+`BuildInfo` variables for short strings. All are generated on build *and* on Editor environment
+switch, so play mode matches the player.
+
+Precedence when the same key comes from more than one place, lowest to highest: global config
+assets → the environment's configs → the environment's own keyed entries.
 
 ## Building
 

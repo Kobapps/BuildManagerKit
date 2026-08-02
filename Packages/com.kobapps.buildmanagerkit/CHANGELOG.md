@@ -4,6 +4,58 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-08-02
+
+### Added
+
+- **Typed per-environment configs.** Derive a `ScriptableObject` from the new
+  `BuildManagerKit.EnvironmentConfig`, list the asset on the environments that should publish it,
+  and read it at runtime through `EnvironmentConfigs.Get<YourConfig>()` — the type is the address,
+  so there is no key to keep in sync between the asset list and the call site, and a rename is a
+  compile error rather than a null at runtime. Full facade: `Get<T>` · `TryGet<T>` · `Has<T>` ·
+  `GetOrDefault<T>` · `GetOrCreate<T>` · `Require<T>` · `Get<T>(key)` · `All` · `EnvironmentId`.
+  Lookup prefers an exact type match and falls back to an assignable one, so asking for a base class
+  returns whichever subclass the environment publishes.
+- **Configs are shared by listing one asset on several environments.** There is a single asset, so
+  it is edited once and every environment listing it picks the change up; an environment needing
+  different values gets its own instead. The window marks a shared config `SHARED ×n`, names the
+  other environments in the tooltip, and its ⋮ menu adds or removes it from any of them.
+- **Each config's inspector is drawn inline in the Environments tab**, folded behind a one-line
+  summary, so comparing dev against prod no longer means clicking through to separate assets. The
+  new **Add** menu creates a config of any type in the project, adopts one another environment
+  already publishes, or accepts a drag-and-drop; `EnvironmentConfig.Summary` supplies the collapsed
+  line.
+- `EnvironmentAssets.GetConfig<T>()`, `TryGetConfig<T>()` and `Configs` expose the same type-based
+  lookup on the generated asset, and `BuildEnvironment.GetConfig<T>()` answers for any environment
+  from Editor code.
+- `EnvironmentConfigCatalog` — the Editor-side operations behind all of this (discover config types,
+  find assets, attach, detach, create, and list which environments publish a given config), so a
+  script or a test does exactly what the window does.
+- The **New** menu offers only types an asset can actually be created from — concrete, top-level and
+  non-generic. Unity resolves a `ScriptableObject`'s script by finding a file named after the class,
+  which a nested type never has, so an asset created from one saves with a null script reference and
+  cannot be loaded. `TypeCache` reports every loaded assembly including the test ones, whose fixtures
+  are exactly that shape.
+- The health check reports two configs resolving to the same key in one environment, and empty slots
+  in a config list. The existing "published by some environments but not others" warning now covers
+  configs, so a config on `dev` but not on `prod` is caught before the release build.
+
+### Changed
+
+- `-bmkDescribe` now lists each environment's typed configs as `key=Type (path)` alongside the
+  existing `configKeys`, so an agent can share a config by referencing the asset rather than
+  creating a second one.
+- Publish precedence is now, lowest to highest: global config assets → the environment's configs →
+  the environment's own keyed entries. Existing setups are unaffected — keyed entries still win over
+  the global defaults exactly as before.
+
+### Removed
+
+- **The Appearance card on the Settings tab.** Theme and density are EditorCoreKit-wide preferences
+  rather than anything this tool owns, and embedding the picker put a 260-pixel copy of another
+  package's settings pane in the middle of a build tool. Set them where they live, in the
+  EditorCoreKit theme settings.
+
 ## [1.4.0] — 2026-07-31
 
 ### Changed

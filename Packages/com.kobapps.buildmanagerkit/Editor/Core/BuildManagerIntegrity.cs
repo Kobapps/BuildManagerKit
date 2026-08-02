@@ -38,6 +38,7 @@ namespace BuildManagerKit.Editor
             CheckDuplicateIds(settings, report);
             CheckEnvironmentDefines(settings, report);
             CheckOutputCollisions(settings, report);
+            CheckConfigs(settings, report);
             CheckConfigAssets(settings, report);
             CheckQueues(settings, report);
             CheckReferences(settings, report);
@@ -210,6 +211,53 @@ namespace BuildManagerKit.Editor
                     $"Profiles {string.Join(", ", group.Select(p => "'" + p.Id + "'"))} share the output template "
                     + $"'{template}' with no {{target}}, {{platform}} or {{profile}} token, so they overwrite each "
                     + "other. A queue building them in sequence would keep only the last one.");
+            }
+        }
+
+        /// <summary>
+        /// Typed configs. Two of the same type in one environment is the interesting case: they
+        /// resolve to the same key, so only one is published and <c>EnvironmentConfigs.Get&lt;T&gt;</c>
+        /// returns whichever won — a coin toss that looks like the config "not saving".
+        ///
+        /// The other trap is two config *types* sharing a short name across namespaces. The key is
+        /// the short name, so those collide the moment one environment publishes both.
+        /// </summary>
+        private static void CheckConfigs(BuildManagerSettings settings, BuildValidationReport report)
+        {
+            foreach (var environment in settings.Environments.Where(e => e != null))
+            {
+                var byKey = new Dictionary<string, EnvironmentConfig>(StringComparer.OrdinalIgnoreCase);
+
+                for (var i = 0; i < environment.Configs.Count; i++)
+                {
+                    var config = environment.Configs[i];
+
+                    if (config == null)
+                    {
+                        report.AddWarning(
+                            $"Environment '{environment.Id}' has an empty slot in its config list "
+                            + $"(position {i + 1}); it publishes nothing.");
+
+                        continue;
+                    }
+
+                    var key = config.ConfigKey;
+
+                    if (byKey.TryGetValue(key, out var existing))
+                    {
+                        report.AddError(
+                            $"Environment '{environment.Id}' publishes '{existing.name}' and '{config.name}' "
+                            + $"under the same key '{key}', so only one of them reaches the player. "
+                            + (existing.GetType() == config.GetType()
+                                ? $"Both are {config.GetType().Name}s — give one of them an explicit config key, "
+                                  + "or remove it."
+                                : "Their type names collide; give one an explicit config key."));
+
+                        continue;
+                    }
+
+                    byKey[key] = config;
+                }
             }
         }
 

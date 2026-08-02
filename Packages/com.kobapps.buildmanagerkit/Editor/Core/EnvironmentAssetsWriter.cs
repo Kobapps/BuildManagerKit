@@ -65,8 +65,13 @@ namespace BuildManagerKit.Editor
         }
 
         /// <summary>
-        /// The entries that would be published: defaults first, then the environment's own, with
-        /// the environment winning on a shared key. Empty keys and missing assets are dropped.
+        /// The entries that would be published, in precedence order: the project-wide defaults, then
+        /// the environment's typed configs, then its own keyed entries. Later layers win on a shared
+        /// key. Empty keys and missing assets are dropped.
+        ///
+        /// Typed configs sit between the two so a keyed entry can still override one by name — the
+        /// escape hatch for a project that has both — while a config never silently loses to a
+        /// project-wide default it knows nothing about.
         /// </summary>
         /// <param name="environment">Environment to resolve, may be null.</param>
         /// <param name="settings">Settings holding the defaults, may be null.</param>
@@ -76,26 +81,42 @@ namespace BuildManagerKit.Editor
             var byKey = new Dictionary<string, EnvironmentAssetEntry>(StringComparer.OrdinalIgnoreCase);
             var order = new List<string>();
 
+            void Add(string key, UnityEngine.Object asset)
+            {
+                if (string.IsNullOrWhiteSpace(key) || asset == null)
+                    return;
+
+                var trimmed = key.Trim();
+
+                if (!byKey.ContainsKey(trimmed))
+                    order.Add(trimmed);
+
+                byKey[trimmed] = new EnvironmentAssetEntry(trimmed, asset);
+            }
+
             void Apply(IReadOnlyList<EnvironmentAssetEntry> entries)
             {
                 if (entries == null)
                     return;
 
                 foreach (var entry in entries)
+                    Add(entry.key, entry.asset);
+            }
+
+            void ApplyConfigs(IReadOnlyList<EnvironmentConfig> configs)
+            {
+                if (configs == null)
+                    return;
+
+                foreach (var config in configs)
                 {
-                    if (string.IsNullOrWhiteSpace(entry.key) || entry.asset == null)
-                        continue;
-
-                    var key = entry.key.Trim();
-
-                    if (!byKey.ContainsKey(key))
-                        order.Add(key);
-
-                    byKey[key] = new EnvironmentAssetEntry(key, entry.asset);
+                    if (config != null)
+                        Add(config.ConfigKey, config);
                 }
             }
 
             Apply(settings != null ? settings.DefaultConfigAssets : null);
+            ApplyConfigs(environment != null ? environment.Configs : null);
             Apply(environment != null ? environment.ConfigAssets : null);
 
             return order.Select(key => byKey[key]).ToList();
