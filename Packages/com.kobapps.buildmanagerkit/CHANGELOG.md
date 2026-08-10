@@ -4,6 +4,35 @@ All notable changes to BuildManagerKit are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] — 2026-08-10
+
+### Fixed
+
+- **A per-environment application icon now reaches the icons the built app ships.** The override wrote
+  only the legacy `IconKind.Application` slots, which on Android is the legacy launcher icon alone —
+  every launcher from API 26 on draws the *adaptive* icon and ignores it, so a dev or QA build kept the
+  project's icon on the home screen while the Inspector showed the new one. On iOS the spotlight icons
+  and the 1024 marketing icon the App Store asks for were untouched for the same reason.
+
+  Every kind, size and layer the target reports is written now, through the platform icon API the
+  player reads: on Android the adaptive icon's background and foreground at all six densities plus the
+  round and legacy icons, on iOS the application, spotlight and 1024 store icons, and on a desktop
+  player every size from 16 to 1024. A magenta icon through an environment gives **24** icon resources
+  in the APK where 1.3.1 gave 6, and all ten entries of the generated Xcode project's
+  `AppIcon.appiconset` — `ios-marketing` 1024 included — hold it.
+
+  Notification and settings icons are deliberately left alone: a white silhouette and a small glyph
+  are not a launcher icon, so the project's own stay in place.
+
+- **The icons restored after a build cover the same ground**, so a badged QA icon cannot survive in an
+  adaptive slot into the next build. A snapshot persisted by an earlier version restores its legacy
+  icons exactly as before.
+
+### Added
+
+- **A warning when the assigned icon is smaller than the largest slot it fills.** Unity upscales it
+  without a word, and a blurry 1024 store icon is otherwise found by a store reviewer.
+
 ## [1.3.1] — 2026-07-30
 
 ### Fixed
