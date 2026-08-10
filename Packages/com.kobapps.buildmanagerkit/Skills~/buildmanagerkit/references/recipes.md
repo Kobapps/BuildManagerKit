@@ -146,6 +146,14 @@ afterwards along with the rest of the player settings, so a badged QA icon never
 production build. In the window it lives under `Environments ▸ <env> ▸ Application icon`, which
 previews the texture in effect — the environment's own, or the shared one when the field is empty.
 
+One texture fills **every** slot the target ships, which is what makes the installed app match the
+Editor: on Android the adaptive icon's background and foreground layers at all six densities, plus
+the round and legacy icons — the launcher on API 26 and up draws the adaptive one and ignores the
+rest; on iOS the application, spotlight and 1024 marketing icons; on a desktop player every size
+from 16 to 1024. Notification and settings icons are deliberately untouched: a white silhouette and
+a small glyph are not a launcher icon, so the project's own stay in place. A texture smaller than the
+largest slot is logged as a warning rather than silently upscaled without a word.
+
 ## Add per-environment JSON that shipped code reads
 
 1. Create the file as a `TextAsset`, e.g. `Assets/Config/endpoints_qa.json`.

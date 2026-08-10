@@ -31,7 +31,8 @@ namespace BuildManagerKit.Editor
                  + "Empty leaves it alone.")]
         public string applicationIdentifier = string.Empty;
 
-        [Tooltip("Application icon used by every environment. Empty keeps the project icon.")]
+        [Tooltip("Application icon used by every environment, written into every icon slot of the target "
+                 + "being built. Empty keeps the project icon.")]
         public Texture2D applicationIcon;
 
         [Tooltip("Forces development builds on or off for every environment, unless one says otherwise.")]

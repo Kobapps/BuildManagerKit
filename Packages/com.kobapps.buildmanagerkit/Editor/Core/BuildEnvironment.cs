@@ -59,8 +59,10 @@ namespace BuildManagerKit.Editor
         [SerializeField] private OptionalBool m_ForceDevelopmentBuild = OptionalBool.Inherit;
 
         [Tooltip("Replace the application icon while this environment is active — a badged or tinted icon "
-                 + "makes it obvious which flavour is installed on a device. Restored with the rest of the "
-                 + "player settings when a build finishes. Empty takes the common configuration's icon.")]
+                 + "makes it obvious which flavour is installed on a device. Fills every icon slot the "
+                 + "target ships, including Android's adaptive and round icons and iOS's 1024 marketing "
+                 + "icon, so the built app matches. Restored with the rest of the player settings when a "
+                 + "build finishes. Empty takes the common configuration's icon.")]
         [SerializeField] private Texture2D m_ApplicationIcon;
 
         // The overrides used to be a checkbox beside each field. They are kept, hidden, only so an
