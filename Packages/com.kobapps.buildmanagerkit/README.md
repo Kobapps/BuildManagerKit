@@ -141,7 +141,11 @@ Activating an environment applies **exactly** what a build would apply:
   other environment, so nothing accumulates;
 - applies the product name, company name and bundle identifier overrides;
 - replaces the **application icon** when the environment sets one — a badged or tinted icon makes
-  it obvious at a glance which flavour is installed on a device;
+  it obvious at a glance which flavour is installed on a device. Every icon slot of the target is
+  written, not just the one the Inspector shows first: on Android the adaptive icon (both layers)
+  and the round and legacy icons, on iOS the application, spotlight and 1024 marketing icons, and on
+  a desktop player every size. Notification and settings icons are left alone — they follow their
+  own design rules;
 - regenerates the runtime `BuildInfo` asset;
 - runs the global and the environment's own *on activate* actions.
 

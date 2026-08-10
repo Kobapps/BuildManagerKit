@@ -240,7 +240,8 @@ namespace BuildManagerKit.Editor
             var card = new EckCard(
                 "Application icon",
                 "Used by every environment that does not assign its own. Applied when an environment is "
-                + "activated and when it is built, then restored with the rest of the player settings.");
+                + "activated and when it is built — every icon slot of the target, Android's adaptive and "
+                + "round icons included — then restored with the rest of the player settings.");
 
             var preview = new EckThumbnail(76f, "no icon");
 
@@ -675,8 +676,10 @@ namespace BuildManagerKit.Editor
             var card = new EckCard(
                 "Application icon",
                 "A badged or tinted icon per environment stops a tester filing a bug against the wrong "
-                + "build. Applied when this environment is activated and when it is built, then restored "
-                + "with the rest of the player settings — so it never leaks into a production player.");
+                + "build. Fills every icon slot the target ships — on Android the adaptive icon the "
+                + "launcher actually draws, on iOS the 1024 marketing icon the store asks for. Applied on "
+                + "activation and on build, then restored with the rest of the player settings, so it never "
+                + "leaks into a production player.");
 
             var preview = new EckThumbnail(76f, "no icon");
 
