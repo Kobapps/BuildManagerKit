@@ -82,19 +82,33 @@ namespace BuildManagerKit.Editor
     /// legacy one, and the App Store rejects a build whose 1024 marketing icon is missing. Writing
     /// only the legacy <see cref="IconKind.Application"/> slots therefore changes what the Editor
     /// shows and not what the app ships, so every supported kind, size and layer is written here.
+    ///
+    /// The legacy slots are written as well as the platform ones, not instead of them. Unity fills an
+    /// unassigned platform slot from the target's legacy icon on its way into the Xcode asset catalog
+    /// or the Android resources, so a legacy list left on the project's own artwork puts that artwork
+    /// back into every slot the environment's icon does not cover — the home screen shows the
+    /// environment icon and the app switcher, Spotlight and Settings show the project's.
     /// </summary>
     public static class ApplicationIconService
     {
-        // Notification and settings icons follow their own design rules — a white silhouette on
-        // Android, a small glyph on iOS — so a launcher icon is never written into them. Matching on
-        // the kind name rather than an allow-list means a kind added by a future Editor version is
-        // covered rather than silently skipped.
+        // Notification and settings icons follow their own design rules on a platform that draws them
+        // as a silhouette or a cropped glyph rather than as the app icon, so a launcher icon is never
+        // written into them there. Matching on the kind name rather than an allow-list means a kind
+        // added by a future Editor version is covered rather than silently skipped.
         private static readonly string[] k_UnmanagedKindNames = { "Notification", "Settings" };
+
+        // Apple targets are the exception, and the reason this list exists. Every kind an iOS, tvOS or
+        // visionOS target reports is a full-colour app icon in one asset catalog, differing only in
+        // size: the 29pt "settings" and 20pt "notification" icons are the ones iOS draws on the card
+        // of an app the user swipes up in the switcher, in a Spotlight result, in the Settings list and
+        // above a notification. Skipping them leaves those places on the project's own icon while the
+        // home screen shows the environment's, which is the mismatch the override exists to prevent.
+        private static readonly string[] k_AppleTargetNames = { "iPhone", "tvOS", "VisionOS" };
 
         /// <summary>
         /// Fills every application icon slot of <paramref name="namedTarget"/> with
-        /// <paramref name="icon"/>: the platform icon kinds where the target has them, the legacy
-        /// kinds otherwise.
+        /// <paramref name="icon"/> — the platform icon kinds where the target has them, and the legacy
+        /// kinds either way, so nothing is left for Unity to fall back to.
         /// </summary>
         /// <param name="namedTarget">Target whose icons are replaced.</param>
         /// <param name="icon">Texture to use for every slot.</param>
@@ -107,10 +121,12 @@ namespace BuildManagerKit.Editor
 
             var largestSlot = 0;
 
-            // A platform that has platform icons keeps its real icons there, and its legacy kinds are
-            // a view of the same data at best, so only one of the two paths runs.
-            var applied = ApplyPlatformIcons(namedTarget, icon, log, ref largestSlot)
-                          || ApplyLegacyIcons(namedTarget, icon, log, ref largestSlot);
+            // Both paths run, and neither short-circuits the other: the platform set is what a mobile
+            // player ships, and the legacy list is both what a desktop player ships and what Unity
+            // falls back to for a platform slot the project left empty.
+            var platform = ApplyPlatformIcons(namedTarget, icon, log, ref largestSlot);
+            var legacy = ApplyLegacyIcons(namedTarget, icon, log, ref largestSlot);
+            var applied = platform || legacy;
 
             if (!applied)
             {
@@ -159,7 +175,7 @@ namespace BuildManagerKit.Editor
 
             foreach (var kind in kinds)
             {
-                if (!IsManaged(kind))
+                if (!IsManaged(namedTarget, kind))
                     continue;
 
                 PlatformIcon[] slots;
@@ -205,7 +221,7 @@ namespace BuildManagerKit.Editor
             for (var index = 0; index < kinds.Length; index++)
             {
                 var kind = kinds[index];
-                if (!IsManaged(kind))
+                if (!IsManaged(namedTarget, kind))
                     continue;
 
                 try
@@ -313,13 +329,25 @@ namespace BuildManagerKit.Editor
                 slot.SetTexture(layer < required ? icon : null, layer);
         }
 
-        private static bool IsManaged(PlatformIconKind kind)
+        /// <summary>
+        /// True for a kind the override owns. Every kind of an Apple target is owned; elsewhere the
+        /// notification and settings kinds are left to the project.
+        /// </summary>
+        private static bool IsManaged(NamedBuildTarget namedTarget, PlatformIconKind kind)
         {
+            if (IsAppleTarget(namedTarget))
+                return true;
+
             var name = kind != null ? kind.ToString() : string.Empty;
 
             return !k_UnmanagedKindNames.Any(
                 unmanaged => name.IndexOf(unmanaged, StringComparison.OrdinalIgnoreCase) >= 0);
         }
+
+        /// <summary>True for the targets whose every icon kind is a size of the same app icon.</summary>
+        internal static bool IsAppleTarget(NamedBuildTarget namedTarget) =>
+            k_AppleTargetNames.Any(
+                name => string.Equals(namedTarget.TargetName, name, StringComparison.OrdinalIgnoreCase));
 
         // ---------------------------------------------------------------- legacy icons
 
@@ -426,10 +454,10 @@ namespace BuildManagerKit.Editor
         }
 
         /// <summary>
-        /// The legacy icon kinds worth writing for a target that has no platform icons: the default
-        /// list every player falls back to, and the application list a desktop player builds from.
-        /// There is no API that reports which of them a target supports — an unsupported one has no
-        /// sizes, so the callers skip it.
+        /// The legacy icon kinds worth writing: the default list every player falls back to — including
+        /// a mobile player, for a platform slot the project left empty — and the application list a
+        /// desktop player builds from. There is no API that reports which of them a target supports —
+        /// an unsupported one has no sizes, so the callers skip it.
         ///
         /// Notification and settings are deliberately absent, and <see cref="IconKind.Spotlight"/>
         /// and <see cref="IconKind.Store"/> belong to platforms that keep their icons in the

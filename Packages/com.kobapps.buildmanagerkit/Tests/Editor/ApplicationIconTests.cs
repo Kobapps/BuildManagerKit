@@ -78,7 +78,8 @@ namespace BuildManagerKit.Tests
 
                 var written = 0;
 
-                foreach (var kind in PlayerSettings.GetSupportedIconKinds(target).Where(IsLauncherKind))
+                foreach (var kind in PlayerSettings.GetSupportedIconKinds(target)
+                             .Where(kind => IsManagedKind(target, kind)))
                 {
                     foreach (var slot in PlayerSettings.GetPlatformIcons(target, kind))
                     {
@@ -136,14 +137,14 @@ namespace BuildManagerKit.Tests
         }
 
         [Test]
-        public void NotificationAndSettingsIconsAreLeftAlone()
+        public void NotificationAndSettingsIconsAreLeftAloneOnANonAppleTarget()
         {
             var verified = 0;
 
-            foreach (var target in TargetsWithPlatformIcons())
+            foreach (var target in TargetsWithPlatformIcons().Where(target => !IsAppleTarget(target)))
             {
                 var kinds = PlayerSettings.GetSupportedIconKinds(target)
-                    .Where(kind => !IsLauncherKind(kind))
+                    .Where(kind => !IsManagedKind(target, kind))
                     .ToArray();
 
                 if (kinds.Length == 0)
@@ -163,7 +164,69 @@ namespace BuildManagerKit.Tests
             }
 
             if (verified == 0)
-                Assert.Ignore("No installed platform has notification or settings icons.");
+                Assert.Ignore("No installed non-Apple platform has notification or settings icons.");
+        }
+
+        [Test]
+        public void EveryAppleIconKindIncludingTheSmallSizesIsWritten()
+        {
+            // The reported regression: the home screen showed the environment icon while the card in
+            // the app switcher — and Spotlight, and the Settings list — still showed the project's,
+            // because the 29pt settings and 20pt notification kinds were skipped as if they were
+            // Android's silhouettes. On iOS they are the same app icon at a smaller size.
+            var verified = 0;
+
+            foreach (var target in TargetsWithPlatformIcons().Where(IsAppleTarget))
+            {
+                Guard(target);
+                Assert.IsTrue(ApplicationIconService.Apply(target, m_Icon));
+
+                foreach (var kind in PlayerSettings.GetSupportedIconKinds(target))
+                {
+                    foreach (var slot in PlayerSettings.GetPlatformIcons(target, kind))
+                    {
+                        var textures = slot.GetTextures();
+                        Assert.IsNotEmpty(textures,
+                            $"{target.TargetName} {kind} {slot.width}×{slot.height} has no texture.");
+
+                        Assert.AreSame(m_Icon, textures[0],
+                            $"{target.TargetName} {kind} {slot.width}×{slot.height} kept the project's icon.");
+                        verified++;
+                    }
+                }
+            }
+
+            if (verified == 0)
+                Assert.Ignore("No Apple platform module is installed.");
+        }
+
+        [Test]
+        public void TheLegacyFallbackIsWrittenForATargetThatAlsoHasPlatformIcons()
+        {
+            // Unity fills an unassigned platform slot from the legacy list on the way into the asset
+            // catalog, so leaving it on the project's icon reintroduces the mismatch through the back
+            // door even once every platform kind is written.
+            var verified = 0;
+
+            foreach (var target in TargetsWithPlatformIcons())
+            {
+                var sizes = PlayerSettings.GetIconSizes(target, IconKind.Any);
+                if (sizes.Length == 0)
+                    continue;
+
+                Guard(target);
+                ApplicationIconService.Apply(target, m_Icon);
+
+                var icons = PlayerSettings.GetIcons(target, IconKind.Any);
+                Assert.AreEqual(sizes.Length, icons.Length,
+                    $"{target.TargetName} needs one legacy icon per size.");
+                Assert.IsTrue(icons.All(icon => icon == m_Icon),
+                    $"A {target.TargetName} legacy slot was left with the project's icon.");
+                verified++;
+            }
+
+            if (verified == 0)
+                Assert.Ignore("No installed platform with platform icons exposes legacy icon sizes.");
         }
 
         // ---------------------------------------------------------------- legacy icons
@@ -305,16 +368,23 @@ namespace BuildManagerKit.Tests
         }
 
         /// <summary>
-        /// True for the kinds the override owns — everything except the notification and settings
-        /// icons, which follow their own design rules.
+        /// True for the kinds the override owns: every kind of an Apple target, where each is the same
+        /// app icon at a different size, and everything except the notification and settings icons
+        /// elsewhere, where those follow their own design rules.
         /// </summary>
-        private static bool IsLauncherKind(PlatformIconKind kind)
+        private static bool IsManagedKind(NamedBuildTarget target, PlatformIconKind kind)
         {
+            if (IsAppleTarget(target))
+                return true;
+
             var name = kind.ToString();
 
             return name.IndexOf("Notification", StringComparison.OrdinalIgnoreCase) < 0
                    && name.IndexOf("Settings", StringComparison.OrdinalIgnoreCase) < 0;
         }
+
+        private static bool IsAppleTarget(NamedBuildTarget target) =>
+            ApplicationIconService.IsAppleTarget(target);
 
         /// <summary>Remembers a target's icons so teardown can put them back.</summary>
         private void Guard(NamedBuildTarget target) =>
